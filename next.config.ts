@@ -22,15 +22,8 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  async rewrites() {
-    return [
-      {
-        source: "/:path*",
-        has: [{ type: "host", value: "(?<subdomain>[^.]+)\\.(?!www)[^.]+\\.[^.]+" }],
-        destination: "/site/:path*",
-      },
-    ];
-  },
+  // 서브도메인 멀티테넌시 rewrite는 커스텀 도메인 연결 후 재도입 예정.
+  // vercel.app 기본 도메인을 서브도메인으로 오인해 전 경로를 /site/로 보내는 문제로 비활성화.
 };
 
 export default nextConfig;

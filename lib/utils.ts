@@ -6,14 +6,16 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function generateSiteId(name: string): string {
+  // siteId는 URL 경로·Firestore 문서ID·서브도메인으로 쓰이므로 영숫자만 허용.
+  // 한글 등은 제거하고, 남는 게 없으면 "site"를 기본 prefix로 사용.
   const base = name
     .toLowerCase()
-    .replace(/[^a-z0-9가-힣]/g, "-")
+    .replace(/[^a-z0-9]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 30);
-  const suffix = Math.random().toString(36).slice(2, 6);
-  return `${base}-${suffix}`;
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return base ? `${base}-${suffix}` : `site-${suffix}`;
 }
 
 export function slugify(text: string): string {

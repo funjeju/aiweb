@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateSiteFromInput } from "@/lib/ai/pipeline";
+import { createSite } from "@/lib/firebase/sites";
 
 export const runtime = "nodejs";
-import { createSite, isSubdomainAvailable } from "@/lib/firebase/sites";
-import { slugify } from "@/lib/utils";
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,13 +39,8 @@ export async function POST(req: NextRequest) {
       ownerId,
     });
 
-    // Ensure subdomain is unique
-    let subdomain = slugify(businessName);
-    let available = await isSubdomainAvailable(subdomain);
-    if (!available) {
-      subdomain = `${subdomain}-${Date.now().toString(36)}`;
-    }
-    site.subdomain = subdomain;
+    // siteId 자체가 고유한 영숫자 식별자이므로 subdomain으로 그대로 사용.
+    site.subdomain = site.siteId;
 
     await createSite(site);
 
