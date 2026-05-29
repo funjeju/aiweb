@@ -16,7 +16,7 @@ export async function generateJSON<T>(
   userPrompt: string,
 ): Promise<T> {
   const model = getGenAI().getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-flash-latest",
     generationConfig: {
       responseMimeType: "application/json",
       temperature: 0.3,
@@ -42,7 +42,7 @@ export async function analyzeImageJSON<T>(
   mimeType: string,
 ): Promise<T> {
   const model = getGenAI().getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-flash-latest",
     generationConfig: {
       responseMimeType: "application/json",
       temperature: 0.1,
