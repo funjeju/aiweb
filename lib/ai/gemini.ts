@@ -41,7 +41,15 @@ export async function generateJSON<T>(
  * (상호명만으로 실제 가게 정보를 찾을 때 사용 — 환각/날조를 줄인다)
  * grounding 사용 시 JSON 응답 모드를 못 쓰므로 텍스트로 반환한다.
  */
-export async function generateWithSearch(prompt: string): Promise<string> {
+export interface SearchResult {
+  text: string;
+  /** 실제 웹 검색 근거가 있었는지 (grounding metadata 존재 여부) */
+  grounded: boolean;
+  /** 참조한 출처 URL/도메인 목록 */
+  sources: string[];
+}
+
+export async function generateWithSearch(prompt: string): Promise<SearchResult> {
   const model = getGenAI().getGenerativeModel({
     model: "gemini-flash-latest",
     // SDK 타입에 googleSearch가 없을 수 있어 캐스팅
@@ -51,7 +59,19 @@ export async function generateWithSearch(prompt: string): Promise<string> {
   });
 
   const result = await model.generateContent(prompt);
-  return result.response.text();
+  const text = result.response.text();
+
+  // grounding 메타데이터에서 실제 검색 근거/출처를 추출
+  // (이게 비어 있으면 모델이 웹 검색 없이 자체 지식/추측으로 답한 것 → 신뢰 불가)
+  const candidate = result.response.candidates?.[0] as
+    | { groundingMetadata?: { groundingChunks?: Array<{ web?: { uri?: string; title?: string } }> } }
+    | undefined;
+  const chunks = candidate?.groundingMetadata?.groundingChunks ?? [];
+  const sources = chunks
+    .map((c) => c.web?.uri || c.web?.title || "")
+    .filter(Boolean);
+
+  return { text, grounded: sources.length > 0, sources };
 }
 
 /**
@@ -70,6 +90,9 @@ export interface BusinessInfo {
   reviews: string[];
   vibes: string[];
   found: boolean;
+  /** 실제 웹 검색 출처가 확인됐는지 */
+  grounded: boolean;
+  sources: string[];
 }
 
 export async function searchBusinessInfo(
@@ -81,32 +104,41 @@ export async function searchBusinessInfo(
     `"${name}"`,
     category || "",
     region || "",
-    "가게의 주소, 전화번호, 영업시간, 대표 메뉴와 가격, 분위기, 손님 후기를 웹에서 찾아 알려줘.",
-    "실제로 검색되는 정보만 말하고, 찾을 수 없으면 '정보 없음'이라고 해.",
+    "이 가게의 주소, 전화번호, 영업시간, 대표 메뉴와 정확한 가격, 손님 후기를 웹에서 검색해 알려줘.",
+    "반드시 검색으로 확인된 사실만 말하고, 추측하지 마라. 못 찾으면 '정보 없음'.",
+    "특히 메뉴 가격은 출처에서 확인된 것만 적고, 모르면 그 메뉴는 빼라.",
   ]
     .filter(Boolean)
     .join(" ");
 
-  let searchText = "";
-  try {
-    searchText = await generateWithSearch(query);
-  } catch (err) {
-    console.error("grounding search failed:", err);
-    searchText = "";
-  }
-
   const empty: BusinessInfo = {
     name: "", category: category || "", address: "", phone: "",
-    description: "", businessHours: "", menuItems: [], reviews: [], vibes: [], found: false,
+    description: "", businessHours: "", menuItems: [], reviews: [], vibes: [],
+    found: false, grounded: false, sources: [],
   };
 
-  if (!searchText || searchText.includes("정보 없음")) {
+  let search: SearchResult;
+  try {
+    search = await generateWithSearch(query);
+  } catch (err) {
+    console.error("grounding search failed:", err);
     return empty;
+  }
+
+  // ★ 핵심: 실제 검색 출처가 없으면(모델이 그냥 지어낸 답이면) 전부 폐기한다.
+  if (!search.grounded) {
+    console.warn(`searchBusinessInfo: no grounding sources for "${name}" — discarding (likely hallucination)`);
+    return empty;
+  }
+  if (!search.text || search.text.includes("정보 없음")) {
+    return { ...empty, grounded: true, sources: search.sources };
   }
 
   const STRUCT_PROMPT = `
 다음은 웹 검색으로 수집한 가게 정보 텍스트다. 여기서 사실만 추출해 JSON으로 정리하라.
-규칙: 텍스트에 없는 값은 빈 문자열/빈 배열. 절대 추측·날조 금지.
+규칙:
+- 텍스트에 명시된 값만 사용. 추측·날조 절대 금지.
+- 메뉴는 "이름과 가격이 둘 다 명시된 것"만 넣어라. 가격이 없으면 그 메뉴는 제외.
 
 반환 형식 (JSON):
 {
@@ -119,11 +151,21 @@ export async function searchBusinessInfo(
 `.trim();
 
   try {
-    const data = await generateJSON<Omit<BusinessInfo, "found">>(STRUCT_PROMPT, searchText);
-    const found = !!(data.name || data.address || data.phone || (data.menuItems && data.menuItems.length));
-    return { ...empty, ...data, category: data.category || category || "", found };
+    const data = await generateJSON<Omit<BusinessInfo, "found" | "grounded" | "sources">>(STRUCT_PROMPT, search.text);
+    // 가격 0 이하(=가격 미확인) 메뉴는 신뢰 불가로 제외
+    const cleanMenu = (data.menuItems ?? []).filter((m) => m.name && m.price > 0);
+    const found = !!(data.name || data.address || data.phone || cleanMenu.length);
+    return {
+      ...empty,
+      ...data,
+      menuItems: cleanMenu,
+      category: data.category || category || "",
+      found,
+      grounded: true,
+      sources: search.sources,
+    };
   } catch {
-    return empty;
+    return { ...empty, grounded: true, sources: search.sources };
   }
 }
 

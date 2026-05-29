@@ -63,9 +63,10 @@ export async function generateSiteFromInput(input: AIGenerationInput): Promise<S
         if (info.vibes?.length) input.vibes = [...(input.vibes || []), ...info.vibes];
 
         if (info.menuItems?.length) {
+          // 이름 + 가격(>0)이 모두 확인된 메뉴만 사용 (가격 미확인 = 신뢰 불가, 제외)
           searchedMenu = info.menuItems
-            .filter((m) => m.name)
-            .map((m) => ({ id: crypto.randomUUID(), name: m.name, price: m.price || 0 }));
+            .filter((m) => m.name && m.price > 0)
+            .map((m) => ({ id: crypto.randomUUID(), name: m.name, price: m.price }));
           input.menuItems = searchedMenu.map((m) => `${m.name} ${m.price}원`).join(", ");
         }
         if (info.reviews?.length) {
