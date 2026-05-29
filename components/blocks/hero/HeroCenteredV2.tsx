@@ -14,8 +14,12 @@ export function HeroCenteredV2({ block, site, isEditing, onEdit }: BlockProps) {
   const subtitle = (block.data.subtitle as string) || site.merchantInfo.description;
   const region = site.merchantInfo.address?.split(" ").slice(0, 2).join(" ");
 
+  // 이미지가 있으면 풀블리드로 크게, 없으면 휑하지 않게 적당한 높이 + 콘텐츠 중앙 정렬
+  const heightClass = heroImage ? "min-h-[560px] md:min-h-[640px]" : "min-h-[420px] md:min-h-[480px]";
+  const contentAlign = heroImage ? "justify-end" : "justify-center";
+
   return (
-    <section className="relative w-full min-h-[92vh] flex flex-col overflow-hidden" style={{ backgroundColor: theme.ink }}>
+    <section className={cn("relative w-full flex flex-col overflow-hidden", heightClass)} style={{ backgroundColor: theme.ink }}>
       {heroImage ? (
         <>
           <Image src={heroImage} alt={title} fill className="object-cover" priority />
@@ -29,7 +33,7 @@ export function HeroCenteredV2({ block, site, isEditing, onEdit }: BlockProps) {
       )}
 
       {/* 상단 라벨 바 */}
-      <div className="relative z-10 flex items-center justify-between px-6 pt-8">
+      <div className="relative z-10 flex items-center justify-between px-6 pt-7">
         <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/80">
           {site.merchantInfo.category || "Local Store"}
         </span>
@@ -39,7 +43,7 @@ export function HeroCenteredV2({ block, site, isEditing, onEdit }: BlockProps) {
       </div>
 
       {/* 메인 타이포 */}
-      <div className="relative z-10 flex-1 flex flex-col justify-end px-6 pb-10 max-w-lg mx-auto w-full">
+      <div className={cn("relative z-10 flex-1 flex flex-col px-6 py-10 max-w-lg mx-auto w-full", contentAlign)}>
         {site.contentAssets.logoImage && (
           <Image src={site.contentAssets.logoImage} alt="" width={56} height={56} className="rounded-2xl object-cover mb-6 ring-1 ring-white/20" />
         )}
