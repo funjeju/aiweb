@@ -2,9 +2,10 @@
 
 import type { BlockProps } from "../BlockProps";
 import { getThemeTokens } from "@/lib/design/tokens";
+import { SectionHeader } from "../SectionHeader";
 import { MapPin, Clock, Navigation } from "lucide-react";
 
-export function MapBlockV1({ block, site }: BlockProps) {
+export function MapBlockV1({ block, site, isEditing, onEdit }: BlockProps) {
   const theme = getThemeTokens(site.designTokens.themeId);
   const title = (block.data.title as string) || "위치 안내";
   const { address, businessHours, name } = site.merchantInfo;
@@ -19,9 +20,12 @@ export function MapBlockV1({ block, site }: BlockProps) {
     : undefined;
 
   return (
-    <section className="py-16 px-6" style={{ backgroundColor: theme.surface }}>
+    <section className="py-20 px-6" style={{ backgroundColor: theme.surface }}>
       <div className="max-w-2xl mx-auto">
-        <h2 className="text-2xl font-bold mb-6" style={{ color: theme.text }}>{title}</h2>
+        <div className="mb-8">
+          <SectionHeader eyebrow="Location" title={title}
+            onTitleChange={(v) => onEdit?.(block.blockId, { title: v })} isEditing={isEditing} theme={theme} />
+        </div>
 
         <a
           href={mapUrl}

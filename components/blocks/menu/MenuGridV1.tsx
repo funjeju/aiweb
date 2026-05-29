@@ -3,53 +3,42 @@
 import Image from "next/image";
 import type { BlockProps } from "../BlockProps";
 import { getThemeTokens } from "@/lib/design/tokens";
+import { SectionHeader } from "../SectionHeader";
 import { formatPrice } from "@/lib/utils";
 
-export function MenuGridV1({ block, site }: BlockProps) {
+export function MenuGridV1({ block, site, isEditing, onEdit }: BlockProps) {
   const theme = getThemeTokens(site.designTokens.themeId);
   const title = (block.data.title as string) || "메뉴";
-  const items = site.menuData.items.slice(0, 6);
+  const items = site.menuData.items;
 
   if (items.length === 0) return null;
 
   return (
-    <section className="py-16 px-6" style={{ backgroundColor: theme.surface }}>
+    <section className="py-20 px-6" style={{ backgroundColor: theme.surface }}>
       <div className="max-w-2xl mx-auto">
-        <h2 className="text-2xl font-bold mb-8 text-center" style={{ color: theme.text }}>
-          {title}
-        </h2>
-        <div className="grid grid-cols-2 gap-4">
+        <SectionHeader
+          eyebrow="Menu"
+          title={title}
+          onTitleChange={(v) => onEdit?.(block.blockId, { title: v })}
+          isEditing={isEditing}
+          theme={theme}
+        />
+
+        <div className="mt-10 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-8">
           {items.map((item) => (
-            <div
-              key={item.id}
-              className="rounded-2xl overflow-hidden border"
-              style={{ borderColor: theme.border, backgroundColor: theme.surfaceAlt }}
-            >
-              {item.imageUrl ? (
-                <div className="relative aspect-[4/3]">
-                  <Image src={item.imageUrl} alt={item.name} fill className="object-cover" />
-                </div>
-              ) : (
-                <div
-                  className="aspect-[4/3] flex items-center justify-center text-4xl"
-                  style={{ backgroundColor: theme.surfaceAlt }}
-                >
-                  ☕
-                </div>
-              )}
-              <div className="p-3">
-                <p className="font-semibold text-sm" style={{ color: theme.text }}>
-                  {item.name}
-                </p>
-                {item.description && (
-                  <p className="text-xs mt-0.5 line-clamp-1" style={{ color: theme.textMuted }}>
-                    {item.description}
-                  </p>
+            <div key={item.id} className="group">
+              <div className="relative aspect-square rounded-2xl overflow-hidden mb-3" style={{ backgroundColor: theme.accent }}>
+                {item.imageUrl ? (
+                  <Image src={item.imageUrl} alt={item.name} fill className="object-cover transition-transform duration-500 group-hover:scale-105" />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-2xl opacity-40">🍽️</div>
                 )}
-                <p className="text-sm font-bold mt-1" style={{ color: theme.primary }}>
-                  {formatPrice(item.price)}
-                </p>
               </div>
+              <p className="font-semibold text-sm leading-snug" style={{ color: theme.text }}>{item.name}</p>
+              {item.description && (
+                <p className="text-xs mt-0.5 line-clamp-1" style={{ color: theme.textMuted }}>{item.description}</p>
+              )}
+              <p className="text-sm font-bold mt-1 tabular-nums" style={{ color: theme.primary }}>{formatPrice(item.price)}</p>
             </div>
           ))}
         </div>

@@ -4,7 +4,7 @@ import Image from "next/image";
 import type { BlockProps } from "../BlockProps";
 import { getThemeTokens } from "@/lib/design/tokens";
 import { cn } from "@/lib/utils";
-import { Phone, MapPin, ExternalLink } from "lucide-react";
+import { Phone, MapPin, ArrowUpRight } from "lucide-react";
 import { InlineEdit } from "@/components/editor/InlineEdit";
 
 export function HeroCenteredV2({ block, site, isEditing, onEdit }: BlockProps) {
@@ -12,63 +12,70 @@ export function HeroCenteredV2({ block, site, isEditing, onEdit }: BlockProps) {
   const heroImage = (block.data.heroImage as string) || site.contentAssets.heroImage;
   const title = (block.data.title as string) || site.merchantInfo.name;
   const subtitle = (block.data.subtitle as string) || site.merchantInfo.description;
-  const badge = block.data.badge as string | undefined;
+  const region = site.merchantInfo.address?.split(" ").slice(0, 2).join(" ");
 
   return (
-    <section className="relative w-full min-h-[85vh] flex items-end overflow-hidden">
+    <section className="relative w-full min-h-[92vh] flex flex-col overflow-hidden" style={{ backgroundColor: theme.ink }}>
       {heroImage ? (
         <>
           <Image src={heroImage} alt={title} fill className="object-cover" priority />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/40 to-black/85" />
         </>
       ) : (
-        <div className={cn("absolute inset-0 bg-gradient-to-br", theme.gradient)} />
+        <>
+          <div className={cn("absolute inset-0 bg-gradient-to-br opacity-90", theme.gradient)} />
+          <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "24px 24px" }} />
+        </>
       )}
 
-      <div className="relative z-10 w-full px-6 pb-12 max-w-lg mx-auto">
-        {badge !== undefined && (
-          <InlineEdit
-            value={badge || ""}
-            onChange={(v) => onEdit?.(block.blockId, { badge: v })}
-            isEditing={isEditing}
-            tag="span"
-            className="inline-block text-xs font-semibold px-3 py-1 rounded-full mb-3"
-            style={{ backgroundColor: theme.primary, color: theme.primaryFg } as React.CSSProperties}
-            placeholder="뱃지"
-          />
+      {/* 상단 라벨 바 */}
+      <div className="relative z-10 flex items-center justify-between px-6 pt-8">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/80">
+          {site.merchantInfo.category || "Local Store"}
+        </span>
+        {region && (
+          <span className="text-[11px] font-medium tracking-wide text-white/60">{region}</span>
+        )}
+      </div>
+
+      {/* 메인 타이포 */}
+      <div className="relative z-10 flex-1 flex flex-col justify-end px-6 pb-10 max-w-lg mx-auto w-full">
+        {site.contentAssets.logoImage && (
+          <Image src={site.contentAssets.logoImage} alt="" width={56} height={56} className="rounded-2xl object-cover mb-6 ring-1 ring-white/20" />
         )}
         <InlineEdit
           value={title}
           onChange={(v) => onEdit?.(block.blockId, { title: v })}
           isEditing={isEditing}
           tag="h1"
-          className="text-3xl md:text-4xl font-bold text-white mb-2 leading-tight"
+          className="text-[44px] leading-[1.05] md:text-6xl font-bold tracking-tight text-white mb-4"
           placeholder="가게 이름"
+          multiline
         />
-        {site.merchantInfo.category && <p className="text-sm text-white/70 mb-2">{site.merchantInfo.category}</p>}
         <InlineEdit
           value={subtitle}
           onChange={(v) => onEdit?.(block.blockId, { subtitle: v })}
           isEditing={isEditing}
           tag="p"
-          className="text-base text-white/85 mb-6 leading-relaxed"
-          placeholder="소개 문구"
+          className="text-base md:text-lg text-white/75 leading-relaxed mb-8 max-w-md"
+          placeholder="한 줄 소개"
           multiline
         />
-        <div className="flex gap-3">
+
+        <div className="flex items-center gap-3">
           {site.merchantInfo.phone && (
-            <a href={`tel:${site.merchantInfo.phone}`} className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-semibold" style={{ backgroundColor: theme.primary }}>
-              <Phone size={18} />전화
+            <a href={`tel:${site.merchantInfo.phone}`}
+              className="group flex items-center gap-2 pl-5 pr-4 py-3.5 rounded-full bg-white font-semibold text-sm transition-transform hover:scale-[1.02]"
+              style={{ color: theme.ink }}>
+              <Phone size={16} />전화하기
+              <ArrowUpRight size={16} className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
             </a>
           )}
           {site.merchantInfo.address && (
-            <a href={`https://map.naver.com/search/${encodeURIComponent(site.merchantInfo.address)}`} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-white/15 backdrop-blur text-white font-semibold border border-white/20">
-              <MapPin size={18} />길찾기
-            </a>
-          )}
-          {site.externalLinks.naverPlace && (
-            <a href={site.externalLinks.naverPlace} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center px-4 py-3.5 rounded-2xl bg-white/15 backdrop-blur text-white border border-white/20">
-              <ExternalLink size={18} />
+            <a href={`https://map.naver.com/search/${encodeURIComponent(site.merchantInfo.address)}`}
+              target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2 px-5 py-3.5 rounded-full border border-white/25 text-white font-semibold text-sm backdrop-blur-sm hover:bg-white/10 transition-colors">
+              <MapPin size={16} />길찾기
             </a>
           )}
         </div>

@@ -2,18 +2,22 @@
 
 import type { BlockProps } from "../BlockProps";
 import { getThemeTokens } from "@/lib/design/tokens";
+import { SectionHeader } from "../SectionHeader";
 import { Phone, MapPin, Clock, Instagram, ExternalLink } from "lucide-react";
 
-export function ContactBlockV1({ block, site }: BlockProps) {
+export function ContactBlockV1({ block, site, isEditing, onEdit }: BlockProps) {
   const theme = getThemeTokens(site.designTokens.themeId);
   const title = (block.data.title as string) || "연락처";
   const { phone, address, businessHours } = site.merchantInfo;
   const { naverPlace, instagram } = site.externalLinks;
 
   return (
-    <section className="py-16 px-6" style={{ backgroundColor: theme.surfaceAlt }}>
+    <section className="py-20 px-6" style={{ backgroundColor: theme.surfaceAlt }}>
       <div className="max-w-lg mx-auto">
-        <h2 className="text-2xl font-bold mb-6" style={{ color: theme.text }}>{title}</h2>
+        <div className="mb-8">
+          <SectionHeader eyebrow="Contact" title={title}
+            onTitleChange={(v) => onEdit?.(block.blockId, { title: v })} isEditing={isEditing} theme={theme} />
+        </div>
         <div className="space-y-4">
           {phone && (
             <a href={`tel:${phone}`} className="flex items-center gap-4">
