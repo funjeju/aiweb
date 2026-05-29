@@ -21,7 +21,8 @@ import { useEditorStore } from "@/lib/store/editorStore";
 import { BlockRenderer } from "@/components/blocks/BlockRenderer";
 import { EditorTopBar } from "./EditorTopBar";
 import { EditorSidebar } from "./EditorSidebar";
-import { Loader2, GripVertical } from "lucide-react";
+import { VibeChat } from "./VibeChat";
+import { Loader2, GripVertical, Sparkles } from "lucide-react";
 import type { SiteBlock } from "@/lib/types/site";
 
 interface SiteEditorProps {
@@ -32,6 +33,7 @@ export function SiteEditor({ siteId }: SiteEditorProps) {
   const { site, setSite, updateBlock, reorderBlocks, isDirty, isSaving, setIsSaving, markClean } = useEditorStore();
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -108,6 +110,18 @@ export function SiteEditor({ siteId }: SiteEditorProps) {
           <EditorSidebar site={site} onClose={() => setSidebarOpen(false)} />
         )}
       </div>
+
+      {/* AI 편집 도우미 플로팅 버튼 */}
+      {!chatOpen && (
+        <button
+          onClick={() => setChatOpen(true)}
+          className="fixed bottom-5 right-5 z-40 flex items-center gap-2 px-4 py-3 rounded-full bg-indigo-500 text-white font-semibold shadow-lg hover:bg-indigo-600 transition-colors"
+        >
+          <Sparkles size={18} />
+          AI 편집
+        </button>
+      )}
+      {chatOpen && <VibeChat site={site} onClose={() => setChatOpen(false)} />}
     </div>
   );
 }

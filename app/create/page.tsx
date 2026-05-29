@@ -41,10 +41,43 @@ export default function CreatePage() {
     instagramUrl: "",
   });
   const [error, setError] = useState("");
+  const [scraping, setScraping] = useState(false);
+  const [scrapeMsg, setScrapeMsg] = useState("");
 
   const handleTypeSelect = (type: SiteType) => {
     setForm((p) => ({ ...p, siteType: type }));
     setStep("info");
+  };
+
+  const handleScrape = async () => {
+    const url = form.naverPlaceUrl.trim();
+    if (!url) return;
+    setScraping(true);
+    setScrapeMsg("");
+    try {
+      const res = await fetch("/api/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const { data, scraped } = await res.json();
+      if (scraped && data) {
+        setForm((p) => ({
+          ...p,
+          businessName: data.name || p.businessName,
+          description: data.description || p.description,
+          address: data.address || p.address,
+          phone: data.phone || p.phone,
+        }));
+        setScrapeMsg("정보를 불러왔어요! 확인 후 수정하세요.");
+      } else {
+        setScrapeMsg("자동 수집에 실패했어요. 직접 입력해주세요.");
+      }
+    } catch {
+      setScrapeMsg("불러오기에 실패했어요. 직접 입력해주세요.");
+    } finally {
+      setScraping(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -213,18 +246,34 @@ export default function CreatePage() {
               </div>
 
               <div className="pt-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">선택 입력</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">자동 채우기 (선택)</p>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                     네이버 플레이스 URL
                   </label>
-                  <input
-                    type="url"
-                    placeholder="https://naver.me/..."
-                    value={form.naverPlaceUrl}
-                    onChange={(e) => setForm((p) => ({ ...p, naverPlaceUrl: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-gray-900 placeholder-gray-400"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://naver.me/..."
+                      value={form.naverPlaceUrl}
+                      onChange={(e) => setForm((p) => ({ ...p, naverPlaceUrl: e.target.value }))}
+                      className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-gray-900 placeholder-gray-400"
+                    />
+                    <button
+                      onClick={handleScrape}
+                      disabled={scraping || !form.naverPlaceUrl.trim()}
+                      className={cn(
+                        "flex-shrink-0 px-4 rounded-xl font-semibold text-sm transition-colors flex items-center gap-1.5",
+                        scraping || !form.naverPlaceUrl.trim()
+                          ? "bg-gray-100 text-gray-400"
+                          : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                      )}
+                    >
+                      {scraping ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                      불러오기
+                    </button>
+                  </div>
+                  {scrapeMsg && <p className="text-xs text-indigo-500 mt-1.5">{scrapeMsg}</p>}
                 </div>
               </div>
 

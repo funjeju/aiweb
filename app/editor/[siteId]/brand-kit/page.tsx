@@ -7,8 +7,9 @@ import { getSiteById } from "@/lib/firebase/sites";
 import type { SiteSchema } from "@/lib/types/site";
 import { getThemeTokens } from "@/lib/design/tokens";
 import { formatPrice } from "@/lib/utils";
-import { ArrowLeft, Download, Loader2, Phone, MapPin, Globe, QrCode } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Phone, MapPin, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { QRCode } from "@/components/QRCode";
 
 type KitTab = "card" | "menu" | "sns";
 
@@ -78,36 +79,41 @@ function BusinessCard({ site, siteId }: { site: SiteSchema; siteId: string }) {
 
       {/* Card Preview */}
       <div ref={cardRef} className="rounded-3xl overflow-hidden shadow-xl mb-6" style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.primary}cc)` }}>
-        <div className="p-6">
-          <div className="mb-4">
-            <p className="text-white/70 text-xs font-semibold uppercase tracking-wider">{site.merchantInfo.category}</p>
-            <p className="text-white text-2xl font-bold mt-1">{site.merchantInfo.name}</p>
-          </div>
-          {site.merchantInfo.description && (
-            <p className="text-white/80 text-sm mb-5 line-clamp-2">{site.merchantInfo.description}</p>
-          )}
-          <div className="space-y-2">
-            {site.merchantInfo.phone && (
-              <div className="flex items-center gap-2 text-white/90 text-sm">
-                <Phone size={14} />
-                <span>{site.merchantInfo.phone}</span>
-              </div>
+        <div className="p-6 flex gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="mb-4">
+              <p className="text-white/70 text-xs font-semibold uppercase tracking-wider">{site.merchantInfo.category}</p>
+              <p className="text-white text-2xl font-bold mt-1">{site.merchantInfo.name}</p>
+            </div>
+            {site.merchantInfo.description && (
+              <p className="text-white/80 text-sm mb-5 line-clamp-2">{site.merchantInfo.description}</p>
             )}
-            {site.merchantInfo.address && (
-              <div className="flex items-center gap-2 text-white/90 text-sm">
-                <MapPin size={14} />
-                <span className="line-clamp-1">{site.merchantInfo.address}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-2 text-white/90 text-sm">
-              <Globe size={14} />
-              <span className="text-xs">{siteUrl}</span>
+            <div className="space-y-2">
+              {site.merchantInfo.phone && (
+                <div className="flex items-center gap-2 text-white/90 text-sm">
+                  <Phone size={14} />
+                  <span>{site.merchantInfo.phone}</span>
+                </div>
+              )}
+              {site.merchantInfo.address && (
+                <div className="flex items-center gap-2 text-white/90 text-sm">
+                  <MapPin size={14} />
+                  <span className="line-clamp-1">{site.merchantInfo.address}</span>
+                </div>
+              )}
             </div>
           </div>
+          {/* QR 코드 */}
+          <div className="flex-shrink-0 flex flex-col items-center gap-1">
+            <div className="bg-white p-1.5 rounded-xl">
+              <QRCode value={siteUrl} size={72} />
+            </div>
+            <span className="text-white/60 text-[10px]">스캔하기</span>
+          </div>
         </div>
-        <div className="bg-white/10 px-6 py-3 flex justify-between items-center">
-          <span className="text-white/60 text-xs">AI 웹빌더로 제작</span>
-          <QrCode size={20} className="text-white/60" />
+        <div className="bg-white/10 px-6 py-3 flex items-center gap-2">
+          <Globe size={12} className="text-white/60" />
+          <span className="text-white/60 text-xs truncate">{siteUrl}</span>
         </div>
       </div>
 

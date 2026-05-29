@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getSitesByOwner } from "@/lib/firebase/sites";
+import { getSitesByOwner, deleteSite } from "@/lib/firebase/sites";
 import { useAuthStore } from "@/lib/store/authStore";
 import { logout } from "@/lib/firebase/auth";
 import type { SiteSchema } from "@/lib/types/site";
-import { Plus, Globe, Pencil, ExternalLink, Sparkles, LogOut, User } from "lucide-react";
+import { Plus, Globe, Pencil, ExternalLink, Sparkles, LogOut, User, MoreVertical, Trash2, Layers } from "lucide-react";
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuthStore();
@@ -97,7 +97,13 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {sites.map((site) => <SiteCard key={site.siteId} site={site} />)}
+            {sites.map((site) => (
+              <SiteCard
+                key={site.siteId}
+                site={site}
+                onDelete={() => setSites((prev) => prev.filter((s) => s.siteId !== site.siteId))}
+              />
+            ))}
           </div>
         )}
       </main>
@@ -105,28 +111,63 @@ export default function DashboardPage() {
   );
 }
 
-function SiteCard({ site }: { site: SiteSchema }) {
+function SiteCard({ site, onDelete }: { site: SiteSchema; onDelete: () => void }) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!confirm(`"${site.merchantInfo.name}" 홈페이지를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    setDeleting(true);
+    try {
+      await deleteSite(site.siteId);
+      onDelete();
+    } catch {
+      setDeleting(false);
+      alert("삭제에 실패했습니다.");
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <p className="font-semibold text-gray-900 truncate">{site.merchantInfo.name}</p>
-          {site.published && (
+          {site.published ? (
             <span className="flex-shrink-0 flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
               <Globe size={10} />공개중
             </span>
+          ) : (
+            <span className="flex-shrink-0 text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비공개</span>
           )}
         </div>
         <p className="text-xs text-gray-400 truncate">{site.merchantInfo.category}</p>
       </div>
-      <div className="flex items-center gap-2 ml-4">
-        <a href={`${appUrl}/site/${site.siteId}`} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-gray-100 rounded-lg">
+      <div className="flex items-center gap-1 ml-4">
+        <a href={`${appUrl}/site/${site.siteId}`} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-gray-100 rounded-lg" title="미리보기">
           <ExternalLink size={16} className="text-gray-500" />
         </a>
         <Link href={`/editor/${site.siteId}`} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-sm rounded-xl font-semibold hover:bg-gray-700">
           <Pencil size={14} />편집
         </Link>
+        <div className="relative">
+          <button onClick={() => setMenuOpen((v) => !v)} className="p-2 hover:bg-gray-100 rounded-lg" disabled={deleting}>
+            <MoreVertical size={16} className="text-gray-500" />
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-20">
+                <Link href={`/editor/${site.siteId}/brand-kit`} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                  <Layers size={14} />마케팅 키트
+                </Link>
+                <button onClick={handleDelete} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50">
+                  <Trash2 size={14} />삭제
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

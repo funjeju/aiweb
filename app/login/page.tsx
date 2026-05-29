@@ -1,29 +1,44 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signInWithGoogle, signInWithEmail, getGoogleRedirectResult } from "@/lib/firebase/auth";
+import { useAuthStore } from "@/lib/store/authStore";
 import { Sparkles, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 text-indigo-400 animate-spin" /></div>}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const from = searchParams.get("from") || "/dashboard";
+  const { user } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // 이미 로그인된 상태면 바로 이동
+  useEffect(() => {
+    if (user) router.replace(from);
+  }, [user, from, router]);
+
   // redirect 방식으로 돌아왔을 때 결과 처리
   useEffect(() => {
-    setLoading(true);
     getGoogleRedirectResult()
       .then((result) => {
-        if (result?.user) router.replace("/dashboard");
+        if (result?.user) router.replace(from);
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [router]);
+      .catch(() => {});
+  }, [router, from]);
 
   const handleGoogle = async () => {
     setLoading(true);
@@ -31,7 +46,7 @@ export default function LoginPage() {
     try {
       await signInWithGoogle();
       // popup 성공 시 바로 이동, redirect 시엔 페이지가 떠남
-      router.push("/dashboard");
+      router.push(from);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message || "";
       if (!msg.includes("redirect")) {
@@ -49,7 +64,7 @@ export default function LoginPage() {
     setError("");
     try {
       await signInWithEmail(email, password);
-      router.push("/dashboard");
+      router.push(from);
     } catch {
       setError("이메일 또는 비밀번호가 올바르지 않습니다.");
       setLoading(false);
