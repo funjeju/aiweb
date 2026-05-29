@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/lib/store/authStore";
 import { ChevronRight, Upload, Store, Sparkles, ArrowLeft, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SiteType } from "@/lib/types/site";
@@ -28,6 +29,7 @@ interface FormData {
 
 export default function CreatePage() {
   const router = useRouter();
+  const { user } = useAuthStore();
   const [step, setStep] = useState<Step>("type");
   const [form, setForm] = useState<FormData>({
     siteType: "cafe",
@@ -63,7 +65,7 @@ export default function CreatePage() {
           description: form.description,
           address: form.address,
           phone: form.phone,
-          ownerId: "demo-user", // TODO: replace with auth user
+          ownerId: user?.uid ?? "anonymous",
         }),
       });
 

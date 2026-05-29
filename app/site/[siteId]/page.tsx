@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { adminDb } from "@/lib/firebase/admin";
+
+export const runtime = "nodejs";
 import type { SiteSchema } from "@/lib/types/site";
 import { PublicSite } from "@/components/PublicSite";
 

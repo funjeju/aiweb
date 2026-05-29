@@ -15,7 +15,6 @@ import type {
 } from "@/lib/types/site";
 import { generateSiteId, slugify } from "@/lib/utils";
 import { TEMPLATES } from "@/lib/types/site";
-import { randomUUID } from "crypto";
 
 interface AIGenerationInput {
   businessName: string;
@@ -132,7 +131,7 @@ export async function extractMenuFromImage(
 ): Promise<MenuItem[]> {
   const result = await analyzeImageJSON<OcrResult>(buildOcrMenuPrompt(), imageBase64, mimeType);
   return (result.menuItems || []).map((item) => ({
-    id: randomUUID(),
+    id: crypto.randomUUID(),
     name: item.name,
     price: item.price,
     category: item.category,

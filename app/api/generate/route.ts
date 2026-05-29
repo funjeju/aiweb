@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateSiteFromInput } from "@/lib/ai/pipeline";
+
+export const runtime = "nodejs";
 import { createSite, isSubdomainAvailable } from "@/lib/firebase/sites";
 import { slugify } from "@/lib/utils";
 

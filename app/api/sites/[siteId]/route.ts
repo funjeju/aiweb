@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
 import type { SiteSchema } from "@/lib/types/site";
 
+export const runtime = "nodejs";
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ siteId: string }> }

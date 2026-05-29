@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractMenuFromImage } from "@/lib/ai/pipeline";
 
+export const runtime = "nodejs";
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();

@@ -8,6 +8,7 @@ interface EditorStore {
   selectedBlockId: string | null;
 
   setSite: (site: SiteSchema) => void;
+  patchSite: (patch: Partial<SiteSchema>) => void;
   updateBlock: (blockId: string, data: Record<string, unknown>) => void;
   reorderBlocks: (blocks: SiteBlock[]) => void;
   toggleBlockVisibility: (blockId: string) => void;
@@ -25,6 +26,12 @@ export const useEditorStore = create<EditorStore>((set) => ({
   selectedBlockId: null,
 
   setSite: (site) => set({ site, isDirty: false }),
+
+  patchSite: (patch) =>
+    set((state) => {
+      if (!state.site) return state;
+      return { isDirty: true, site: { ...state.site, ...patch } };
+    }),
 
   updateBlock: (blockId, data) =>
     set((state) => {

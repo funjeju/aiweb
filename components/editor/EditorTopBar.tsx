@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Save, Eye, Settings2, Globe, Loader2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Save, Eye, Settings2, Globe, Loader2, Layers, Radio } from "lucide-react";
 import type { SiteSchema } from "@/lib/types/site";
 import { cn } from "@/lib/utils";
 
@@ -48,15 +48,17 @@ export function EditorTopBar({ site, isDirty, isSaving, onSave, onOpenSidebar }:
           </button>
         )}
 
-        <a
-          href={previewUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          title="미리보기"
-        >
+        <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="미리보기">
           <Eye size={18} className="text-gray-600" />
         </a>
+
+        <Link href={`/editor/${site.siteId}/brand-kit`} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="마케팅 키트">
+          <Layers size={18} className="text-gray-600" />
+        </Link>
+
+        <Link href={`/editor/${site.siteId}/live-feed`} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Live Feed">
+          <Radio size={18} className="text-gray-600" />
+        </Link>
 
         <button
           onClick={onOpenSidebar}
