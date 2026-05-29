@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { SiteSchema, SiteBlock } from "@/lib/types/site";
+import type { SiteSchema, SiteBlock, BlockComponentType } from "@/lib/types/site";
 
 interface EditorStore {
   site: SiteSchema | null;
@@ -12,6 +12,8 @@ interface EditorStore {
   updateBlock: (blockId: string, data: Record<string, unknown>) => void;
   reorderBlocks: (blocks: SiteBlock[]) => void;
   toggleBlockVisibility: (blockId: string) => void;
+  addBlock: (componentType: BlockComponentType, data?: Record<string, unknown>) => void;
+  removeBlock: (blockId: string) => void;
   updateMerchantInfo: (info: Partial<SiteSchema["merchantInfo"]>) => void;
   updateDesignTokens: (tokens: Partial<SiteSchema["designTokens"]>) => void;
   selectBlock: (blockId: string | null) => void;
@@ -64,6 +66,32 @@ export const useEditorStore = create<EditorStore>((set) => ({
             b.blockId === blockId ? { ...b, visible: b.visible === false ? true : false } : b
           ),
         },
+      };
+    }),
+
+  addBlock: (componentType, data = {}) =>
+    set((state) => {
+      if (!state.site) return state;
+      const blockId = `block-${Date.now()}-${componentType.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+      const newBlock: SiteBlock = { blockId, componentType, data, visible: true };
+      // CTA/Contact/Map 같은 마무리 블록 앞에 삽입 (없으면 맨 끝)
+      const layout = [...state.site.layout];
+      const tailIdx = layout.findIndex((b) =>
+        b.componentType.startsWith("MapBlock") ||
+        b.componentType.startsWith("Contact") ||
+        b.componentType.startsWith("CTABanner")
+      );
+      if (tailIdx >= 0) layout.splice(tailIdx, 0, newBlock);
+      else layout.push(newBlock);
+      return { isDirty: true, site: { ...state.site, layout } };
+    }),
+
+  removeBlock: (blockId) =>
+    set((state) => {
+      if (!state.site) return state;
+      return {
+        isDirty: true,
+        site: { ...state.site, layout: state.site.layout.filter((b) => b.blockId !== blockId) },
       };
     }),
 

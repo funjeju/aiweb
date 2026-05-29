@@ -22,7 +22,6 @@ import { BlockRenderer } from "@/components/blocks/BlockRenderer";
 import { EditorTopBar } from "./EditorTopBar";
 import { EditorSidebar } from "./EditorSidebar";
 import { VibeChat } from "./VibeChat";
-import { withDerivedBlocks } from "@/lib/layout";
 import { Loader2, GripVertical, Sparkles, Monitor, Smartphone } from "lucide-react";
 import type { SiteBlock } from "@/lib/types/site";
 import { cn } from "@/lib/utils";
@@ -117,8 +116,8 @@ export function SiteEditor({ siteId }: SiteEditorProps) {
             viewMode === "mobile" ? "max-w-sm" : "max-w-5xl"
           )}>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={withDerivedBlocks(site).map((b) => b.blockId)} strategy={verticalListSortingStrategy}>
-                {withDerivedBlocks(site).map((block) => (
+              <SortableContext items={site.layout.map((b) => b.blockId)} strategy={verticalListSortingStrategy}>
+                {site.layout.map((block) => (
                   <SortableBlock
                     key={block.blockId}
                     block={block}

@@ -226,18 +226,72 @@ function MenuTab({ site }: { site: SiteSchema }) {
         </div>
         <div className="space-y-2">
           {site.menuData.items.map((item) => (
-            <div key={item.id} className="rounded-xl border border-gray-200 p-3 space-y-2">
-              <div className="flex gap-2">
-                <input value={item.name} onChange={(e) => updateItem(item.id, { name: e.target.value })}
-                  placeholder="메뉴명" className="flex-1 px-2 py-1.5 text-xs rounded-lg border border-gray-200 focus:border-indigo-400 focus:outline-none" />
-                <button onClick={() => removeItem(item.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg"><Trash2 size={12} /></button>
+            <div key={item.id} className="rounded-xl border border-gray-200 p-3 flex gap-3">
+              {/* 메뉴 이미지 업로드/수정/삭제 */}
+              <MenuItemImage
+                siteId={site.siteId}
+                value={item.imageUrl}
+                onChange={(url) => updateItem(item.id, { imageUrl: url })}
+                onRemove={() => updateItem(item.id, { imageUrl: "" })}
+              />
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex gap-2">
+                  <input value={item.name} onChange={(e) => updateItem(item.id, { name: e.target.value })}
+                    placeholder="메뉴명" className="flex-1 px-2 py-1.5 text-xs rounded-lg border border-gray-200 focus:border-indigo-400 focus:outline-none" />
+                  <button onClick={() => removeItem(item.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg flex-shrink-0"><Trash2 size={12} /></button>
+                </div>
+                <input type="number" value={item.price} onChange={(e) => updateItem(item.id, { price: Number(e.target.value) })}
+                  placeholder="가격" className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-200 focus:border-indigo-400 focus:outline-none" />
+                <input value={item.description || ""} onChange={(e) => updateItem(item.id, { description: e.target.value })}
+                  placeholder="설명 (선택)" className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-200 focus:border-indigo-400 focus:outline-none" />
               </div>
-              <input type="number" value={item.price} onChange={(e) => updateItem(item.id, { price: Number(e.target.value) })}
-                placeholder="가격" className="w-full px-2 py-1.5 text-xs rounded-lg border border-gray-200 focus:border-indigo-400 focus:outline-none" />
             </div>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ─── 메뉴 항목 이미지 (업로드/수정/삭제) ─── */
+function MenuItemImage({ siteId, value, onChange, onRemove }: {
+  siteId: string; value?: string; onChange: (url: string) => void; onRemove: () => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handle = async (file: File) => {
+    setUploading(true);
+    try {
+      const url = await uploadSiteImage(siteId, "menu", file);
+      onChange(url);
+    } finally { setUploading(false); }
+  };
+
+  return (
+    <div className="flex-shrink-0">
+      <div
+        onClick={() => !uploading && ref.current?.click()}
+        className="relative w-14 h-14 rounded-lg overflow-hidden border-2 border-dashed border-gray-300 cursor-pointer hover:border-indigo-400 flex items-center justify-center bg-gray-50"
+      >
+        {uploading ? (
+          <Loader2 size={14} className="animate-spin text-gray-400" />
+        ) : value ? (
+          <>
+            <Image src={value} alt="" fill className="object-cover" />
+            <button
+              onClick={(e) => { e.stopPropagation(); onRemove(); }}
+              className="absolute top-0 right-0 bg-red-500 text-white rounded-bl p-0.5"
+            >
+              <X size={9} />
+            </button>
+          </>
+        ) : (
+          <Plus size={14} className="text-gray-400" />
+        )}
+      </div>
+      <input ref={ref} type="file" accept="image/*" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handle(f); }} />
     </div>
   );
 }
@@ -331,46 +385,96 @@ function getBlockFamily(componentType: string): string {
   return componentType.replace(/-v\d+$/, "");
 }
 
+// 추가 가능한 블록 카탈로그 (family → 기본 componentType + 라벨)
+const ADDABLE_BLOCKS: Array<{ family: string; type: BlockComponentType; label: string; emoji: string }> = [
+  { family: "FeaturedCard", type: "FeaturedCard-v2", label: "추천 메뉴", emoji: "⭐" },
+  { family: "MenuGrid", type: "MenuGrid-v1", label: "메뉴", emoji: "🍽️" },
+  { family: "PriceList", type: "PriceList-v1", label: "가격표", emoji: "💰" },
+  { family: "GalleryGrid", type: "GalleryGrid-v1", label: "갤러리", emoji: "🖼️" },
+  { family: "ReviewCarousel", type: "ReviewCarousel-v1", label: "리뷰", emoji: "💬" },
+  { family: "BusinessHours", type: "BusinessHours-v1", label: "영업시간", emoji: "🕒" },
+  { family: "MapBlock", type: "MapBlock-v1", label: "지도", emoji: "📍" },
+  { family: "ContactBlock", type: "ContactBlock-v1", label: "연락처", emoji: "📞" },
+  { family: "CTABanner", type: "CTABanner-v1", label: "문의 배너", emoji: "📣" },
+];
+
 function BlocksTab({ site }: { site: SiteSchema }) {
-  const { toggleBlockVisibility, reorderBlocks } = useEditorStore();
-  const { patchSite } = useEditorStore();
+  const { toggleBlockVisibility, removeBlock, addBlock, patchSite } = useEditorStore();
 
   const changeVariation = (blockId: string, newType: BlockComponentType) => {
     const next = site.layout.map((b) => b.blockId === blockId ? { ...b, componentType: newType } : b);
     patchSite({ layout: next });
   };
 
-  return (
-    <div className="space-y-3">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">블록 관리 · 갈아끼우기</p>
-      {site.layout.map((block) => {
-        const family = getBlockFamily(block.componentType);
-        const variants = BLOCK_VARIATIONS[family] || [];
+  const existingFamilies = new Set(site.layout.map((b) => getBlockFamily(b.componentType)));
 
-        return (
-          <div key={block.blockId} className="rounded-xl border border-gray-200 overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 bg-gray-50">
-              <p className="text-xs font-semibold text-gray-700 truncate">{family}</p>
-              <button onClick={() => toggleBlockVisibility(block.blockId)}
-                className={cn("text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0",
-                  block.visible === false ? "bg-gray-200 text-gray-400" : "bg-green-100 text-green-600")}>
-                {block.visible === false ? "숨김" : "표시"}
-              </button>
-            </div>
-            {variants.length > 1 && (
-              <div className="flex p-2 gap-1.5">
-                {variants.map((v) => (
-                  <button key={v} onClick={() => changeVariation(block.blockId, v)}
-                    className={cn("flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors",
-                      block.componentType === v ? "bg-indigo-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
-                    {v.split("-").pop()?.toUpperCase()}
+  return (
+    <div className="space-y-5">
+      {/* 현재 블록 관리 */}
+      <div className="space-y-3">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">현재 블록</p>
+        {site.layout.map((block) => {
+          const family = getBlockFamily(block.componentType);
+          const variants = BLOCK_VARIATIONS[family] || [];
+          const isHero = family.startsWith("Hero");
+
+          return (
+            <div key={block.blockId} className="rounded-xl border border-gray-200 overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 bg-gray-50">
+                <p className="text-xs font-semibold text-gray-700 truncate">{family}</p>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button onClick={() => toggleBlockVisibility(block.blockId)}
+                    className={cn("text-xs px-2 py-0.5 rounded-full font-medium",
+                      block.visible === false ? "bg-gray-200 text-gray-400" : "bg-green-100 text-green-600")}>
+                    {block.visible === false ? "숨김" : "표시"}
                   </button>
-                ))}
+                  {/* Hero는 삭제 불가 (최소 1개 필요) */}
+                  {!isHero && (
+                    <button onClick={() => removeBlock(block.blockId)}
+                      className="p-1 text-red-400 hover:bg-red-50 rounded" title="블록 삭제">
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        );
-      })}
+              {variants.length > 1 && (
+                <div className="flex p-2 gap-1.5">
+                  {variants.map((v) => (
+                    <button key={v} onClick={() => changeVariation(block.blockId, v)}
+                      className={cn("flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                        block.componentType === v ? "bg-indigo-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
+                      {v.split("-").pop()?.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 블록 추가 */}
+      <div className="space-y-3 pt-2 border-t border-gray-100">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">블록 추가</p>
+        <div className="grid grid-cols-3 gap-2">
+          {ADDABLE_BLOCKS.map((b) => {
+            const already = existingFamilies.has(b.family);
+            return (
+              <button
+                key={b.family}
+                onClick={() => addBlock(b.type)}
+                className="flex flex-col items-center gap-1 p-2.5 rounded-xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-center"
+                title={already ? "이미 추가됨 — 한 번 더 추가 가능" : "추가"}
+              >
+                <span className="text-lg">{b.emoji}</span>
+                <span className="text-[11px] font-medium text-gray-700">{b.label}</span>
+                {already && <span className="text-[9px] text-gray-400">추가됨</span>}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-gray-400">블록을 추가한 뒤 위 탭(메뉴·사진·리뷰)에서 내용을 채우세요.</p>
+      </div>
     </div>
   );
 }

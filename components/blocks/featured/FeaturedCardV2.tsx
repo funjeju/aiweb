@@ -4,6 +4,7 @@ import Image from "next/image";
 import type { BlockProps } from "../BlockProps";
 import { getThemeTokens } from "@/lib/design/tokens";
 import { SectionHeader } from "../SectionHeader";
+import { EmptyBlockHint } from "../EmptyBlockHint";
 import { InlineEdit } from "@/components/editor/InlineEdit";
 
 interface FeaturedItem { title: string; description: string; imageUrl?: string; badge?: string; }
@@ -18,7 +19,10 @@ export function FeaturedCardV2({ block, site, isEditing, onEdit }: BlockProps) {
     onEdit?.(block.blockId, { items: next });
   };
 
-  if (items.length === 0) return null;
+  if (items.length === 0) {
+    if (!isEditing) return null;
+    return <EmptyBlockHint label="추천 메뉴 (내용 없음)" hint="‘메뉴’ 탭에서 항목을 추가하세요." theme={theme} />;
+  }
 
   return (
     <section className="py-20 px-6" style={{ backgroundColor: theme.surface }}>

@@ -2,7 +2,6 @@
 
 import type { SiteSchema } from "@/lib/types/site";
 import { BlockRenderer } from "./blocks/BlockRenderer";
-import { withDerivedBlocks } from "@/lib/layout";
 import { Phone, MessageCircle } from "lucide-react";
 
 interface PublicSiteProps {
@@ -10,10 +9,9 @@ interface PublicSiteProps {
 }
 
 export function PublicSite({ site }: PublicSiteProps) {
-  const blocks = withDerivedBlocks(site);
   return (
     <div className="min-h-screen bg-white">
-      {blocks.map((block) => (
+      {site.layout.map((block) => (
         <BlockRenderer key={block.blockId} block={block} site={site} />
       ))}
 

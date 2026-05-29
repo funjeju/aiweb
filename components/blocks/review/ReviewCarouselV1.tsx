@@ -4,6 +4,7 @@ import { useRef } from "react";
 import type { BlockProps } from "../BlockProps";
 import { getThemeTokens } from "@/lib/design/tokens";
 import { SectionHeader } from "../SectionHeader";
+import { EmptyBlockHint } from "../EmptyBlockHint";
 import { Star, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface ReviewItem { author: string; rating: number; text: string; date?: string; }
@@ -21,7 +22,10 @@ export function ReviewCarouselV1({ block, site, isEditing, onEdit }: BlockProps)
     el.scrollBy({ left: dir === "left" ? -amount : amount, behavior: "smooth" });
   };
 
-  if (reviews.length === 0) return null;
+  if (reviews.length === 0) {
+    if (!isEditing) return null;
+    return <EmptyBlockHint label="리뷰 (내용 없음)" hint="‘리뷰’ 탭에서 후기를 추가하세요." theme={theme} />;
+  }
 
   return (
     <section className="py-20" style={{ backgroundColor: theme.accent }}>

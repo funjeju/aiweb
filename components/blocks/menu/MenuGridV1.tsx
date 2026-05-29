@@ -4,6 +4,7 @@ import Image from "next/image";
 import type { BlockProps } from "../BlockProps";
 import { getThemeTokens } from "@/lib/design/tokens";
 import { SectionHeader } from "../SectionHeader";
+import { EmptyBlockHint } from "../EmptyBlockHint";
 import { formatPrice } from "@/lib/utils";
 
 export function MenuGridV1({ block, site, isEditing, onEdit }: BlockProps) {
@@ -11,7 +12,10 @@ export function MenuGridV1({ block, site, isEditing, onEdit }: BlockProps) {
   const title = (block.data.title as string) || "메뉴";
   const items = site.menuData.items;
 
-  if (items.length === 0) return null;
+  if (items.length === 0) {
+    if (!isEditing) return null;
+    return <EmptyBlockHint label="메뉴 (내용 없음)" hint="‘메뉴’ 탭에서 메뉴를 추가하세요." theme={theme} />;
+  }
 
   return (
     <section className="py-20 px-6" style={{ backgroundColor: theme.surface }}>
