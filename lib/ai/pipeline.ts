@@ -1,4 +1,5 @@
 import { generateJSON, analyzeImageJSON, searchBusinessInfo } from "./gemini";
+import { searchKakaoPlace } from "@/lib/kakao/local";
 import {
   SITE_GENERATION_SYSTEM_PROMPT,
   buildGenerationPrompt,
@@ -45,12 +46,28 @@ interface AIGenerationResult {
 }
 
 export async function generateSiteFromInput(input: AIGenerationInput): Promise<SiteSchema> {
-  // ── 0단계: 정보가 부족하면 웹 검색(grounding)으로 실제 가게 정보 보강 ──
-  // 메뉴/리뷰는 검색으로 찾은 "실제" 데이터만 사용한다.
   let searchedMenu: MenuItem[] = [];
   let searchedReviews: Array<{ author: string; rating: number; text: string }> = [];
+  // 카카오에서 가져온 좌표 (지도 렌더링용)
+  let coordinates: { lat: number; lng: number } | undefined;
 
-  const needsEnrichment = !input.address || !input.phone || !input.menuItems;
+  // ── 1단계: 카카오 로컬 검색 — 한국 가게의 주소/전화/좌표/카테고리 (정확) ──
+  if (!input.address || !input.phone) {
+    try {
+      const place = await searchKakaoPlace(input.businessName, input.address);
+      if (place) {
+        input.address = input.address || place.address;
+        input.phone = input.phone || place.phone;
+        if (!input.category && place.category) input.category = place.category;
+        if (place.lat && place.lng) coordinates = { lat: place.lat, lng: place.lng };
+      }
+    } catch (err) {
+      console.error("kakao local search failed:", err);
+    }
+  }
+
+  // ── 2단계: 구글 웹 검색(grounding) — 메뉴/리뷰/소개 등 보조 정보 ──
+  const needsEnrichment = !input.description || !input.menuItems || !input.reviews?.length;
   if (needsEnrichment) {
     try {
       const info = await searchBusinessInfo(input.businessName, input.category, input.address);
@@ -63,7 +80,6 @@ export async function generateSiteFromInput(input: AIGenerationInput): Promise<S
         if (info.vibes?.length) input.vibes = [...(input.vibes || []), ...info.vibes];
 
         if (info.menuItems?.length) {
-          // 이름 + 가격(>0)이 모두 확인된 메뉴만 사용 (가격 미확인 = 신뢰 불가, 제외)
           searchedMenu = info.menuItems
             .filter((m) => m.name && m.price > 0)
             .map((m) => ({ id: crypto.randomUUID(), name: m.name, price: m.price }));
@@ -143,6 +159,7 @@ export async function generateSiteFromInput(input: AIGenerationInput): Promise<S
       address: input.address || "",
       description: input.description || "",
       businessHours: input.businessHours || "",
+      ...(coordinates ? { coordinates } : {}),
     },
     externalLinks: {},
     designTokens: {

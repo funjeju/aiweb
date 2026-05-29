@@ -101,12 +101,11 @@ export async function searchBusinessInfo(
   region?: string
 ): Promise<BusinessInfo> {
   const query = [
-    `"${name}"`,
+    `${name}`,
     category || "",
     region || "",
-    "이 가게의 주소, 전화번호, 영업시간, 대표 메뉴와 정확한 가격, 손님 후기를 웹에서 검색해 알려줘.",
-    "반드시 검색으로 확인된 사실만 말하고, 추측하지 마라. 못 찾으면 '정보 없음'.",
-    "특히 메뉴 가격은 출처에서 확인된 것만 적고, 모르면 그 메뉴는 빼라.",
+    "이 가게를 웹에서 검색해서 주소, 전화번호, 영업시간, 소개, 대표 메뉴와 가격, 손님 후기를 정리해줘.",
+    "야놀자·아고다·트립닷컴·네이버·인스타그램 등 검색 결과를 적극 활용해.",
   ]
     .filter(Boolean)
     .join(" ");
@@ -125,20 +124,17 @@ export async function searchBusinessInfo(
     return empty;
   }
 
-  // ★ 핵심: 실제 검색 출처가 없으면(모델이 그냥 지어낸 답이면) 전부 폐기한다.
-  if (!search.grounded) {
-    console.warn(`searchBusinessInfo: no grounding sources for "${name}" — discarding (likely hallucination)`);
-    return empty;
-  }
-  if (!search.text || search.text.includes("정보 없음")) {
-    return { ...empty, grounded: true, sources: search.sources };
+  if (!search.text || search.text.trim().length < 10) {
+    return { ...empty, grounded: search.grounded, sources: search.sources };
   }
 
   const STRUCT_PROMPT = `
-다음은 웹 검색으로 수집한 가게 정보 텍스트다. 여기서 사실만 추출해 JSON으로 정리하라.
+다음은 웹 검색으로 수집한 가게 정보 텍스트다. 여기서 사실 정보를 추출해 JSON으로 정리하라.
 규칙:
-- 텍스트에 명시된 값만 사용. 추측·날조 절대 금지.
-- 메뉴는 "이름과 가격이 둘 다 명시된 것"만 넣어라. 가격이 없으면 그 메뉴는 제외.
+- 텍스트에 나온 주소/전화/영업시간/소개는 그대로 사용한다.
+- 메뉴는 가격이 명시된 것만 넣는다. 가격을 모르면 그 메뉴는 제외(0 금지).
+- 후기는 텍스트에 실제로 인용된 후기 문장만. 없으면 빈 배열.
+- 텍스트에 전혀 없는 항목은 빈 값으로 둔다 (지어내지 말 것).
 
 반환 형식 (JSON):
 {
@@ -152,20 +148,20 @@ export async function searchBusinessInfo(
 
   try {
     const data = await generateJSON<Omit<BusinessInfo, "found" | "grounded" | "sources">>(STRUCT_PROMPT, search.text);
-    // 가격 0 이하(=가격 미확인) 메뉴는 신뢰 불가로 제외
+    // 가격 0 이하(=가격 미확인) 메뉴는 제외 (가짜 가격 방지)
     const cleanMenu = (data.menuItems ?? []).filter((m) => m.name && m.price > 0);
-    const found = !!(data.name || data.address || data.phone || cleanMenu.length);
+    const found = !!(data.name || data.address || data.phone || data.description || cleanMenu.length);
     return {
       ...empty,
       ...data,
       menuItems: cleanMenu,
       category: data.category || category || "",
       found,
-      grounded: true,
+      grounded: search.grounded,
       sources: search.sources,
     };
   } catch {
-    return { ...empty, grounded: true, sources: search.sources };
+    return { ...empty, grounded: search.grounded, sources: search.sources };
   }
 }
 

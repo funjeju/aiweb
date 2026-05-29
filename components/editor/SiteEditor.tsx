@@ -22,6 +22,7 @@ import { BlockRenderer } from "@/components/blocks/BlockRenderer";
 import { EditorTopBar } from "./EditorTopBar";
 import { EditorSidebar } from "./EditorSidebar";
 import { VibeChat } from "./VibeChat";
+import { withDerivedBlocks } from "@/lib/layout";
 import { Loader2, GripVertical, Sparkles, Monitor, Smartphone } from "lucide-react";
 import type { SiteBlock } from "@/lib/types/site";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,8 @@ export function SiteEditor({ siteId }: SiteEditorProps) {
     if (!over || active.id === over.id || !site) return;
     const oldIdx = site.layout.findIndex((b) => b.blockId === active.id);
     const newIdx = site.layout.findIndex((b) => b.blockId === over.id);
+    // 자동 생성된(auto-*) 블록은 실제 layout에 없으므로 reorder 대상이 아님
+    if (oldIdx < 0 || newIdx < 0) return;
     reorderBlocks(arrayMove(site.layout, oldIdx, newIdx));
   };
 
@@ -114,8 +117,8 @@ export function SiteEditor({ siteId }: SiteEditorProps) {
             viewMode === "mobile" ? "max-w-sm" : "max-w-5xl"
           )}>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={site.layout.map((b) => b.blockId)} strategy={verticalListSortingStrategy}>
-                {site.layout.map((block) => (
+              <SortableContext items={withDerivedBlocks(site).map((b) => b.blockId)} strategy={verticalListSortingStrategy}>
+                {withDerivedBlocks(site).map((block) => (
                   <SortableBlock
                     key={block.blockId}
                     block={block}
