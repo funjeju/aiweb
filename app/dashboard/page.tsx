@@ -7,6 +7,7 @@ import { getSitesByOwner, deleteSite } from "@/lib/firebase/sites";
 import { useAuthStore } from "@/lib/store/authStore";
 import { logout } from "@/lib/firebase/auth";
 import type { SiteSchema } from "@/lib/types/site";
+import { getAppUrl } from "@/lib/utils";
 import { Plus, Globe, Pencil, ExternalLink, Sparkles, LogOut, User, MoreVertical, Trash2, Layers } from "lucide-react";
 
 export default function DashboardPage() {
@@ -112,7 +113,7 @@ export default function DashboardPage() {
 }
 
 function SiteCard({ site, onDelete }: { site: SiteSchema; onDelete: () => void }) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 

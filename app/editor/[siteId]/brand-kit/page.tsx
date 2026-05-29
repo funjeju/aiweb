@@ -6,7 +6,7 @@ import Link from "next/link";
 import { getSiteById } from "@/lib/firebase/sites";
 import type { SiteSchema } from "@/lib/types/site";
 import { getThemeTokens } from "@/lib/design/tokens";
-import { formatPrice } from "@/lib/utils";
+import { formatPrice, getAppUrl } from "@/lib/utils";
 import { ArrowLeft, Download, Loader2, Phone, MapPin, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { QRCode } from "@/components/QRCode";
@@ -60,7 +60,7 @@ export default function BrandKitPage() {
 function BusinessCard({ site, siteId }: { site: SiteSchema; siteId: string }) {
   const theme = getThemeTokens(site.designTokens.themeId);
   const cardRef = useRef<HTMLDivElement>(null);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
   const siteUrl = `${appUrl}/site/${siteId}`;
 
   const downloadCard = async () => {

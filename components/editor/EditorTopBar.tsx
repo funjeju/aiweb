@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, Save, Eye, Settings2, Globe, Loader2, Layers, Radio } from "lucide-react";
 import type { SiteSchema } from "@/lib/types/site";
-import { cn } from "@/lib/utils";
+import { cn, getAppUrl } from "@/lib/utils";
 
 interface EditorTopBarProps {
   site: SiteSchema;
@@ -14,8 +14,7 @@ interface EditorTopBarProps {
 }
 
 export function EditorTopBar({ site, isDirty, isSaving, onSave, onOpenSidebar }: EditorTopBarProps) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const previewUrl = `${appUrl}/site/${site.siteId}`;
+  const previewUrl = `${getAppUrl()}/site/${site.siteId}`;
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">

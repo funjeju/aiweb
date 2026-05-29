@@ -3,11 +3,10 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { getSiteById, updateSite, isSubdomainAvailable } from "@/lib/firebase/sites";
+import { getSiteById, updateSite } from "@/lib/firebase/sites";
 import type { SiteSchema } from "@/lib/types/site";
 import { Globe, Link2, Copy, CheckCircle2, ArrowLeft, Loader2, ExternalLink } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { slugify } from "@/lib/utils";
+import { cn, getAppUrl } from "@/lib/utils";
 
 export default function PublishPage() {
   const { siteId } = useParams<{ siteId: string }>();
@@ -15,32 +14,23 @@ export default function PublishPage() {
   const [site, setSite] = useState<SiteSchema | null>(null);
   const [loading, setLoading] = useState(true);
   const [subdomain, setSubdomain] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [available, setAvailable] = useState<boolean | null>(null);
+  const [available] = useState<boolean | null>(true);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = getAppUrl();
 
   useEffect(() => {
     getSiteById(siteId).then((s) => {
       if (s) {
         setSite(s);
-        setSubdomain(s.subdomain || slugify(s.merchantInfo.name));
+        setSubdomain(s.subdomain || siteId);
         if (s.published) setPublished(true);
       }
       setLoading(false);
     });
   }, [siteId]);
-
-  const checkSubdomain = async (val: string) => {
-    if (!val || val === site?.subdomain) { setAvailable(true); return; }
-    setChecking(true);
-    const ok = await isSubdomainAvailable(val);
-    setAvailable(ok);
-    setChecking(false);
-  };
 
   const handlePublish = async () => {
     if (!site) return;

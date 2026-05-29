@@ -1,9 +1,10 @@
 "use client";
 
+import { useRef } from "react";
 import type { BlockProps } from "../BlockProps";
 import { getThemeTokens } from "@/lib/design/tokens";
 import { SectionHeader } from "../SectionHeader";
-import { Star } from "lucide-react";
+import { Star, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface ReviewItem { author: string; rating: number; text: string; date?: string; }
 
@@ -11,12 +12,20 @@ export function ReviewCarouselV1({ block, site, isEditing, onEdit }: BlockProps)
   const theme = getThemeTokens(site.designTokens.themeId);
   const title = (block.data.title as string) || "고객 후기";
   const reviews = (block.data.reviews as ReviewItem[]) || [];
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (dir: "left" | "right") => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const amount = el.clientWidth * 0.8;
+    el.scrollBy({ left: dir === "left" ? -amount : amount, behavior: "smooth" });
+  };
 
   if (reviews.length === 0) return null;
 
   return (
     <section className="py-20" style={{ backgroundColor: theme.accent }}>
-      <div className="max-w-2xl mx-auto px-6">
+      <div className="max-w-2xl mx-auto px-6 flex items-end justify-between gap-4">
         <SectionHeader
           eyebrow="Reviews"
           title={title}
@@ -24,9 +33,35 @@ export function ReviewCarouselV1({ block, site, isEditing, onEdit }: BlockProps)
           isEditing={isEditing}
           theme={theme}
         />
+        {/* 좌우 화살표 (후기 2개 이상일 때) */}
+        {reviews.length > 1 && (
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => scroll("left")}
+              aria-label="이전 후기"
+              className="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+              style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}`, color: theme.text }}
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => scroll("right")}
+              aria-label="다음 후기"
+              className="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+              style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}`, color: theme.text }}
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="mt-10 flex gap-4 overflow-x-auto hide-scrollbar px-6 snap-x snap-mandatory">
+      <div
+        ref={scrollRef}
+        className="mt-10 flex gap-4 overflow-x-auto hide-scrollbar px-6 snap-x snap-mandatory scroll-smooth"
+      >
         {reviews.map((review, i) => (
           <figure
             key={i}

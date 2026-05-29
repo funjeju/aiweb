@@ -33,3 +33,26 @@ export function formatPrice(price: number): string {
 export function formatPhone(phone: string): string {
   return phone.replace(/(\d{3,4})(\d{3,4})(\d{4})/, "$1-$2-$3");
 }
+
+/**
+ * 앱의 기준 URL을 반환한다.
+ * 1순위: 브라우저에서 실행 중이면 현재 origin (배포 도메인 그대로)
+ * 2순위: NEXT_PUBLIC_APP_URL 환경변수
+ * 3순위: Vercel 자동 주입 도메인
+ * 4순위: localhost (로컬 개발)
+ */
+export function getAppUrl(): string {
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+  if (process.env.NEXT_PUBLIC_VERCEL_URL) {
+    return `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return "http://localhost:3000";
+}
