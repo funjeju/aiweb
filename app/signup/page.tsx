@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signInWithGoogle, signUpWithEmail } from "@/lib/firebase/auth";
+import { signInWithGoogle, signUpWithEmail, getGoogleRedirectResult } from "@/lib/firebase/auth";
 import { Sparkles, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,15 +14,24 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    getGoogleRedirectResult()
+      .then((result) => { if (result?.user) router.replace("/dashboard"); })
+      .catch(() => {});
+  }, [router]);
+
   const handleGoogle = async () => {
     setLoading(true);
+    setError("");
     try {
       await signInWithGoogle();
       router.push("/dashboard");
-    } catch {
-      setError("Google 로그인에 실패했습니다.");
-    } finally {
-      setLoading(false);
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message || "";
+      if (!msg.includes("redirect")) {
+        setError("Google 로그인에 실패했습니다.");
+        setLoading(false);
+      }
     }
   };
 

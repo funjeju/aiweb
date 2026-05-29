@@ -5,8 +5,9 @@ import type { BlockProps } from "../BlockProps";
 import { getThemeTokens } from "@/lib/design/tokens";
 import { cn } from "@/lib/utils";
 import { Phone, MapPin, ExternalLink } from "lucide-react";
+import { InlineEdit } from "@/components/editor/InlineEdit";
 
-export function HeroCenteredV2({ block, site }: BlockProps) {
+export function HeroCenteredV2({ block, site, isEditing, onEdit }: BlockProps) {
   const theme = getThemeTokens(site.designTokens.themeId);
   const heroImage = (block.data.heroImage as string) || site.contentAssets.heroImage;
   const title = (block.data.title as string) || site.merchantInfo.name;
@@ -25,53 +26,48 @@ export function HeroCenteredV2({ block, site }: BlockProps) {
       )}
 
       <div className="relative z-10 w-full px-6 pb-12 max-w-lg mx-auto">
-        {badge && (
-          <span
+        {badge !== undefined && (
+          <InlineEdit
+            value={badge || ""}
+            onChange={(v) => onEdit?.(block.blockId, { badge: v })}
+            isEditing={isEditing}
+            tag="span"
             className="inline-block text-xs font-semibold px-3 py-1 rounded-full mb-3"
-            style={{ backgroundColor: theme.primary, color: theme.primaryFg }}
-          >
-            {badge}
-          </span>
+            style={{ backgroundColor: theme.primary, color: theme.primaryFg } as React.CSSProperties}
+            placeholder="뱃지"
+          />
         )}
-        <h1 className="text-3xl md:text-4xl font-bold text-white mb-2 leading-tight">
-          {title}
-        </h1>
-        {site.merchantInfo.category && (
-          <p className="text-sm text-white/70 mb-2">{site.merchantInfo.category}</p>
-        )}
-        {subtitle && (
-          <p className="text-base text-white/85 mb-6 leading-relaxed">{subtitle}</p>
-        )}
-
+        <InlineEdit
+          value={title}
+          onChange={(v) => onEdit?.(block.blockId, { title: v })}
+          isEditing={isEditing}
+          tag="h1"
+          className="text-3xl md:text-4xl font-bold text-white mb-2 leading-tight"
+          placeholder="가게 이름"
+        />
+        {site.merchantInfo.category && <p className="text-sm text-white/70 mb-2">{site.merchantInfo.category}</p>}
+        <InlineEdit
+          value={subtitle}
+          onChange={(v) => onEdit?.(block.blockId, { subtitle: v })}
+          isEditing={isEditing}
+          tag="p"
+          className="text-base text-white/85 mb-6 leading-relaxed"
+          placeholder="소개 문구"
+          multiline
+        />
         <div className="flex gap-3">
           {site.merchantInfo.phone && (
-            <a
-              href={`tel:${site.merchantInfo.phone}`}
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-semibold"
-              style={{ backgroundColor: theme.primary }}
-            >
-              <Phone size={18} />
-              전화
+            <a href={`tel:${site.merchantInfo.phone}`} className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-semibold" style={{ backgroundColor: theme.primary }}>
+              <Phone size={18} />전화
             </a>
           )}
           {site.merchantInfo.address && (
-            <a
-              href={`https://map.naver.com/search/${encodeURIComponent(site.merchantInfo.address)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-white/15 backdrop-blur text-white font-semibold border border-white/20"
-            >
-              <MapPin size={18} />
-              길찾기
+            <a href={`https://map.naver.com/search/${encodeURIComponent(site.merchantInfo.address)}`} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-white/15 backdrop-blur text-white font-semibold border border-white/20">
+              <MapPin size={18} />길찾기
             </a>
           )}
           {site.externalLinks.naverPlace && (
-            <a
-              href={site.externalLinks.naverPlace}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center px-4 py-3.5 rounded-2xl bg-white/15 backdrop-blur text-white border border-white/20"
-            >
+            <a href={site.externalLinks.naverPlace} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center px-4 py-3.5 rounded-2xl bg-white/15 backdrop-blur text-white border border-white/20">
               <ExternalLink size={18} />
             </a>
           )}

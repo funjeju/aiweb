@@ -8,6 +8,20 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
   },
+  async headers() {
+    return [
+      {
+        // Firebase Google 로그인 팝업이 부모 창과 통신할 수 있도록 허용
+        source: "/(.*)",
+        headers: [
+          {
+            key: "Cross-Origin-Opener-Policy",
+            value: "same-origin-allow-popups",
+          },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return [
       {
