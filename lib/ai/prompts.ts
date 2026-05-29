@@ -6,16 +6,25 @@ export const SITE_GENERATION_SYSTEM_PROMPT = `
 역할:
 - 입력 데이터를 분석하여 웹사이트 JSON 데이터를 생성한다
 - Pattern Library에서만 블록 타입을 선택한다 (랜덤 생성 금지)
-- 리뷰 기반 마케팅 카피를 생성한다
-- 빈 화면은 절대 허용하지 않는다 (Always Render Something)
+- 업종/분위기에 맞는 템플릿과 테마를 큐레이션한다
 
-규칙:
+★★★ 가장 중요한 규칙 — 사실 날조 절대 금지 ★★★
+- 메뉴, 가격, 리뷰, 후기, 전화번호, 주소, 영업시간 같은 "사실 정보"는
+  입력 데이터에 명시적으로 주어진 것만 사용한다.
+- 입력에 없는 메뉴/리뷰/가격을 절대 지어내지 마라.
+  예) 입력에 메뉴가 없으면 featuredItems는 반드시 빈 배열 [].
+  예) 입력에 리뷰가 없으면 reviews는 반드시 빈 배열 [].
+- 존재하지 않는 가게 정보를 상상해서 채우는 것은 금지다.
+
+허용되는 것 (날조가 아닌 카피라이팅):
+- heroTitle, heroSubtitle: 상호명/업종/소개를 바탕으로 한 짧은 환영 문구는 허용.
+  단, 구체적 사실(특정 메뉴명, 수상이력, 없는 특징)은 넣지 마라.
+
+기타 규칙:
 1. 반드시 유효한 JSON만 반환한다
-2. 랜덤 디자인 생성 금지
-3. HTML/CSS 코드 생성 금지
-4. Pattern Library의 componentType만 사용
-5. 누락 데이터는 업종에 맞는 placeholder로 채운다
-6. 카피는 과장 없이 리뷰 기반으로 짧고 직관적으로
+2. 랜덤 디자인 생성 금지, HTML/CSS 코드 생성 금지
+3. Pattern Library의 componentType만 사용
+4. 데이터가 없는 섹션은 빈 배열로 두면 된다 (빈 섹션은 화면에 표시되지 않음)
 
 Pattern Library (사용 가능한 componentType):
 - HeroCentered-v1, HeroCentered-v2, HeroCentered-v3
@@ -42,6 +51,9 @@ export function buildGenerationPrompt(input: {
   vibes?: string[];
   siteType?: SiteType;
 }): string {
+  const hasReviews = !!(input.reviews && input.reviews.length > 0);
+  const hasMenu = !!(input.menuItems && input.menuItems.trim());
+
   return `
 다음 소상공인 정보로 웹사이트 데이터를 생성하라.
 
@@ -55,31 +67,35 @@ export function buildGenerationPrompt(input: {
 - 메뉴: ${input.menuItems || "없음"}
 - 분위기: ${input.vibes?.join(", ") || "없음"}
 
+데이터 처리 지시:
+- 리뷰 데이터: ${hasReviews ? "있음 → reviews에 입력된 리뷰만 반영" : "★없음 → reviews는 반드시 빈 배열 []. 리뷰를 지어내지 마라."}
+- 메뉴 데이터: ${hasMenu ? "있음 → featuredItems에 입력된 메뉴만 반영" : "★없음 → featuredItems는 반드시 빈 배열 []. 메뉴를 지어내지 마라."}
+- heroTitle/heroSubtitle: 상호명과 업종에 어울리는 담백한 환영 문구만. 없는 사실 넣지 말 것.
+
 반환 형식 (JSON):
 {
   "siteType": "cafe|restaurant|beauty|stay|general",
   "themeId": "warm-ocean|jeju-warm|luxury-modern|minimal-clean|vintage-cozy|fresh-green",
-  "heroTitle": "...",
-  "heroSubtitle": "...",
-  "heroBadge": "...",
-  "heroCtaText": "...",
-  "featuredTitle": "...",
-  "featuredItems": [
-    { "title": "...", "description": "...", "badge": "..." }
-  ],
-  "reviewTitle": "...",
-  "reviews": [
-    { "author": "방문자", "rating": 5, "text": "..." }
-  ],
+  "heroTitle": "상호명 기반 짧은 제목",
+  "heroSubtitle": "업종/소개 기반 한 줄 (없는 사실 금지)",
+  "heroBadge": "",
+  "featuredTitle": "추천 메뉴",
+  "featuredItems": [],
+  "reviewTitle": "고객 후기",
+  "reviews": [],
   "layout": [
     { "componentType": "HeroCentered-v2" },
-    { "componentType": "FeaturedCard-v2" },
-    { "componentType": "GalleryGrid-v1" },
-    { "componentType": "ReviewCarousel-v1" },
     { "componentType": "MapBlock-v1" },
+    { "componentType": "ContactBlock-v1" },
     { "componentType": "CTABanner-v1" }
   ]
 }
+
+layout 구성 지시:
+- 기본 layout에는 Hero + Map + Contact + CTA만 포함한다 (사실 데이터 없이도 정직하게 채워지는 블록).
+- 메뉴 데이터가 있을 때만 FeaturedCard-v2 또는 MenuGrid-v1을 layout에 추가한다.
+- 리뷰 데이터가 있을 때만 ReviewCarousel-v1을 layout에 추가한다.
+- 사장님이 나중에 에디터에서 사진/메뉴/리뷰를 직접 추가할 수 있으므로, 빈 콘텐츠 블록을 억지로 넣지 않는다.
 `.trim();
 }
 

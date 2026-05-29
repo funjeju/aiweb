@@ -1,4 +1,4 @@
-import { generateJSON, analyzeImageJSON } from "./gemini";
+import { generateJSON, analyzeImageJSON, searchBusinessInfo } from "./gemini";
 import {
   SITE_GENERATION_SYSTEM_PROMPT,
   buildGenerationPrompt,
@@ -13,7 +13,7 @@ import type {
   ThemeId,
   MenuItem,
 } from "@/lib/types/site";
-import { generateSiteId, slugify } from "@/lib/utils";
+import { generateSiteId } from "@/lib/utils";
 import { TEMPLATES } from "@/lib/types/site";
 
 interface AIGenerationInput {
@@ -25,6 +25,7 @@ interface AIGenerationInput {
   reviews?: string[];
   menuItems?: string;
   vibes?: string[];
+  businessHours?: string;
   heroImage?: string;
   galleryImages?: string[];
   ownerId: string;
@@ -44,6 +45,42 @@ interface AIGenerationResult {
 }
 
 export async function generateSiteFromInput(input: AIGenerationInput): Promise<SiteSchema> {
+  // ── 0단계: 정보가 부족하면 웹 검색(grounding)으로 실제 가게 정보 보강 ──
+  // 메뉴/리뷰는 검색으로 찾은 "실제" 데이터만 사용한다.
+  let searchedMenu: MenuItem[] = [];
+  let searchedReviews: Array<{ author: string; rating: number; text: string }> = [];
+
+  const needsEnrichment = !input.address || !input.phone || !input.menuItems;
+  if (needsEnrichment) {
+    try {
+      const info = await searchBusinessInfo(input.businessName, input.category, input.address);
+      if (info.found) {
+        input.address = input.address || info.address;
+        input.phone = input.phone || info.phone;
+        input.description = input.description || info.description;
+        if (!input.category && info.category) input.category = info.category;
+        if (info.businessHours) input.businessHours = info.businessHours;
+        if (info.vibes?.length) input.vibes = [...(input.vibes || []), ...info.vibes];
+
+        if (info.menuItems?.length) {
+          searchedMenu = info.menuItems
+            .filter((m) => m.name)
+            .map((m) => ({ id: crypto.randomUUID(), name: m.name, price: m.price || 0 }));
+          input.menuItems = searchedMenu.map((m) => `${m.name} ${m.price}원`).join(", ");
+        }
+        if (info.reviews?.length) {
+          searchedReviews = info.reviews
+            .filter(Boolean)
+            .slice(0, 6)
+            .map((text) => ({ author: "방문자", rating: 5, text }));
+          input.reviews = info.reviews;
+        }
+      }
+    } catch (err) {
+      console.error("business search enrichment failed:", err);
+    }
+  }
+
   const prompt = buildGenerationPrompt({
     businessName: input.businessName,
     category: input.category,
@@ -57,8 +94,13 @@ export async function generateSiteFromInput(input: AIGenerationInput): Promise<S
 
   const ai = await generateJSON<AIGenerationResult>(SITE_GENERATION_SYSTEM_PROMPT, prompt);
 
+  // 검색으로 찾은 실제 리뷰가 있으면 AI 생성분보다 우선
+  if (searchedReviews.length > 0) {
+    ai.reviews = searchedReviews;
+  }
+
   const siteId = generateSiteId(input.businessName);
-  const subdomain = slugify(input.businessName);
+  const subdomain = siteId;
   const template = TEMPLATES.find((t) => t.siteType === ai.siteType) ?? TEMPLATES[0];
 
   const blocks: SiteBlock[] = (ai.layout ?? template.blocks.map((c) => ({ componentType: c }))).map(
@@ -99,6 +141,7 @@ export async function generateSiteFromInput(input: AIGenerationInput): Promise<S
       phone: input.phone || "",
       address: input.address || "",
       description: input.description || "",
+      businessHours: input.businessHours || "",
     },
     externalLinks: {},
     designTokens: {
@@ -114,7 +157,7 @@ export async function generateSiteFromInput(input: AIGenerationInput): Promise<S
       menuImages: [],
       reviewImages: [],
     },
-    menuData: { source: "manual", items: [] },
+    menuData: { source: searchedMenu.length ? "ai" : "manual", items: searchedMenu },
     layout: blocks,
   };
 

@@ -60,8 +60,16 @@ export default function CreatePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
       });
-      const { data, scraped } = await res.json();
-      if (scraped && data) {
+      const { data, scraped, reason } = await res.json();
+      // 실제로 채워진 필드가 있는지 직접 확인 (빈 값이면 성공이라고 거짓말하지 않는다)
+      const filled = data && (data.name || data.address || data.phone || data.description);
+
+      if (scraped && filled) {
+        const got: string[] = [];
+        if (data.name) got.push("상호명");
+        if (data.address) got.push("주소");
+        if (data.phone) got.push("전화");
+        if (data.description) got.push("소개");
         setForm((p) => ({
           ...p,
           businessName: data.name || p.businessName,
@@ -69,9 +77,14 @@ export default function CreatePage() {
           address: data.address || p.address,
           phone: data.phone || p.phone,
         }));
-        setScrapeMsg("정보를 불러왔어요! 확인 후 수정하세요.");
+        setScrapeMsg(`불러온 정보: ${got.join(", ")}. 확인 후 수정하세요.`);
       } else {
-        setScrapeMsg("자동 수집에 실패했어요. 직접 입력해주세요.");
+        const msg = reason === "blocked-or-empty"
+          ? "네이버가 자동 수집을 차단했어요. 정보를 직접 입력해주세요."
+          : reason === "no-place-id"
+          ? "네이버 플레이스 URL이 아닌 것 같아요. 직접 입력해주세요."
+          : "자동 수집된 정보가 없어요. 직접 입력해주세요.";
+        setScrapeMsg(msg);
       }
     } catch {
       setScrapeMsg("불러오기에 실패했어요. 직접 입력해주세요.");

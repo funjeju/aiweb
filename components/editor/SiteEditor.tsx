@@ -22,8 +22,9 @@ import { BlockRenderer } from "@/components/blocks/BlockRenderer";
 import { EditorTopBar } from "./EditorTopBar";
 import { EditorSidebar } from "./EditorSidebar";
 import { VibeChat } from "./VibeChat";
-import { Loader2, GripVertical, Sparkles } from "lucide-react";
+import { Loader2, GripVertical, Sparkles, Monitor, Smartphone } from "lucide-react";
 import type { SiteBlock } from "@/lib/types/site";
+import { cn } from "@/lib/utils";
 
 interface SiteEditorProps {
   siteId: string;
@@ -34,6 +35,7 @@ export function SiteEditor({ siteId }: SiteEditorProps) {
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -89,7 +91,28 @@ export function SiteEditor({ siteId }: SiteEditorProps) {
 
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 overflow-y-auto py-6 px-4">
-          <div className="max-w-sm mx-auto rounded-3xl overflow-hidden shadow-2xl bg-white border border-gray-200">
+          {/* 데스크탑/모바일 미리보기 토글 */}
+          <div className="flex items-center justify-center gap-1 mb-4">
+            <div className="inline-flex bg-white rounded-xl border border-gray-200 p-1">
+              <button
+                onClick={() => setViewMode("desktop")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                  viewMode === "desktop" ? "bg-indigo-500 text-white" : "text-gray-500")}>
+                <Monitor size={14} />PC
+              </button>
+              <button
+                onClick={() => setViewMode("mobile")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                  viewMode === "mobile" ? "bg-indigo-500 text-white" : "text-gray-500")}>
+                <Smartphone size={14} />모바일
+              </button>
+            </div>
+          </div>
+
+          <div className={cn(
+            "mx-auto rounded-3xl overflow-hidden shadow-2xl bg-white border border-gray-200 transition-all",
+            viewMode === "mobile" ? "max-w-sm" : "max-w-5xl"
+          )}>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={site.layout.map((b) => b.blockId)} strategy={verticalListSortingStrategy}>
                 {site.layout.map((block) => (
