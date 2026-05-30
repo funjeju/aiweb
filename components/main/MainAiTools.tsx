@@ -12,7 +12,7 @@ interface Tool {
 }
 
 const TOOLS: Tool[] = [
-  { label: "디지털 명함", desc: "QR 포함 명함을 즉시 생성", icon: <CreditCard size={22} />, href: "/create" },
+  { label: "디지털 명함", desc: "QR 포함 명함을 무료로 체험", icon: <CreditCard size={22} />, href: "/tools/business-card" },
   { label: "메뉴 포스터", desc: "사진 한 장으로 메뉴판 제작", icon: <ImageIcon size={22} />, href: "/create" },
   { label: "SNS 카드", desc: "인스타·스레드용 카드 생성", icon: <Megaphone size={22} />, href: "/create" },
   { label: "QR 메뉴판", desc: "테이블 QR 메뉴판", icon: <QrCode size={22} />, href: "/create" },
