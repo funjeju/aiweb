@@ -3,6 +3,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://aiweb-xi-one.vercel.app"),
   title: {
     default: "AI 웹빌더 - 소상공인 홈페이지 3분 완성",
     template: "%s | AI 웹빌더",
