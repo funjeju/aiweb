@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { X, Loader2, Plus, Trash2, Star } from "lucide-react";
+import { X, Loader2, Plus, Trash2, Star, Search } from "lucide-react";
 import Image from "next/image";
 import type { SiteSchema, MenuItem, SiteBlock, BlockComponentType } from "@/lib/types/site";
 import { VIBES } from "@/lib/types/site";
@@ -16,10 +16,10 @@ interface EditorSidebarProps {
   onClose: () => void;
 }
 
-type Tab = "design" | "info" | "images" | "menu" | "reviews" | "blocks";
+type Tab = "design" | "info" | "images" | "menu" | "reviews" | "blog" | "blocks";
 
 const TAB_LABELS: Record<Tab, string> = {
-  design: "디자인", info: "정보", images: "사진", menu: "메뉴", reviews: "리뷰", blocks: "블록",
+  design: "디자인", info: "정보", images: "사진", menu: "메뉴", reviews: "리뷰", blog: "블로그", blocks: "블록",
 };
 
 export function EditorSidebar({ site, onClose }: EditorSidebarProps) {
@@ -140,6 +140,9 @@ export function EditorSidebar({ site, onClose }: EditorSidebarProps) {
 
         {/* ── 리뷰 탭 ── */}
         {tab === "reviews" && <ReviewsTab site={site} />}
+
+        {/* ── 블로그 탭 ── */}
+        {tab === "blog" && <BlogTab site={site} />}
 
         {/* ── 블록 탭 ── */}
         {tab === "blocks" && <BlocksTab site={site} />}
@@ -296,6 +299,103 @@ function MenuItemImage({ siteId, value, onChange, onRemove }: {
   );
 }
 
+/* ─── BlogTab (네이버 블로그 후기) ─── */
+interface BlogPost { title: string; link: string; description: string; bloggername?: string; postdate?: string; }
+
+function BlogTab({ site }: { site: SiteSchema }) {
+  const { patchSite } = useEditorStore();
+  const [searching, setSearching] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [manualUrl, setManualUrl] = useState("");
+
+  // 블로그 블록 찾기 (없으면 생성 안내)
+  const blogBlock = site.layout.find((b) => b.componentType.startsWith("BlogReviews"));
+  const posts: BlogPost[] = (blogBlock?.data.posts as BlogPost[]) || [];
+
+  const savePosts = (next: BlogPost[]) => {
+    if (!blogBlock) return;
+    const layout = site.layout.map((b) =>
+      b.blockId === blogBlock.blockId ? { ...b, data: { ...b.data, posts: next } } : b
+    );
+    patchSite({ layout });
+  };
+
+  const handleSearch = async () => {
+    if (!blogBlock) return;
+    setSearching(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/blog-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: site.merchantInfo.name }),
+      });
+      const { posts: found, configured } = await res.json();
+      if (!configured) {
+        setMsg("네이버 API 키 미설정 — 운영자가 키를 등록하면 자동 검색됩니다. 아래에서 링크를 직접 추가하세요.");
+      } else if (found?.length) {
+        savePosts(found);
+        setMsg(`${found.length}개의 블로그 후기를 불러왔어요.`);
+      } else {
+        setMsg("검색 결과가 없어요. 링크를 직접 추가하세요.");
+      }
+    } catch {
+      setMsg("검색에 실패했어요.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const addManual = () => {
+    const url = manualUrl.trim();
+    if (!url) return;
+    savePosts([...posts, { title: "블로그 후기", link: url, description: "" }]);
+    setManualUrl("");
+  };
+
+  const removePost = (i: number) => savePosts(posts.filter((_, j) => j !== i));
+
+  if (!blogBlock) {
+    return <p className="text-sm text-gray-400 text-center py-8">블로그 후기 블록이 없습니다.<br/>‘블록’ 탭에서 블로그 후기를 추가하세요.</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">네이버 블로그 자동 검색</p>
+        <button onClick={handleSearch} disabled={searching}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-300 text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-500 transition-colors">
+          {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+          “{site.merchantInfo.name}” 후기 검색
+        </button>
+        {msg && <p className="text-xs text-indigo-500 mt-1.5">{msg}</p>}
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">링크 직접 추가</p>
+        <div className="flex gap-2">
+          <input value={manualUrl} onChange={(e) => setManualUrl(e.target.value)}
+            placeholder="블로그 글 URL" className="flex-1 px-3 py-2 text-xs rounded-lg border border-gray-200 focus:border-indigo-400 focus:outline-none" />
+          <button onClick={addManual} className="px-3 rounded-lg bg-indigo-50 text-indigo-600 text-xs font-semibold"><Plus size={14} /></button>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {posts.map((post, i) => (
+          <div key={i} className="rounded-xl border border-gray-200 p-3 flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <input value={post.title} onChange={(e) => savePosts(posts.map((p, j) => j === i ? { ...p, title: e.target.value } : p))}
+                className="w-full text-xs font-medium bg-transparent focus:outline-none" />
+              <p className="text-[11px] text-gray-400 truncate mt-0.5">{post.link}</p>
+            </div>
+            <button onClick={() => removePost(i)} className="p-1 text-red-400 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ─── ReviewsTab ─── */
 interface ReviewItem { author: string; rating: number; text: string; date?: string; }
 
@@ -379,6 +479,7 @@ const BLOCK_VARIATIONS: Record<string, BlockComponentType[]> = {
   ContactBlock: ["ContactBlock-v1"],
   PriceList: ["PriceList-v1"],
   BusinessHours: ["BusinessHours-v1"],
+  BlogReviews: ["BlogReviews-v1"],
 };
 
 function getBlockFamily(componentType: string): string {
@@ -392,6 +493,7 @@ const ADDABLE_BLOCKS: Array<{ family: string; type: BlockComponentType; label: s
   { family: "PriceList", type: "PriceList-v1", label: "가격표", emoji: "💰" },
   { family: "GalleryGrid", type: "GalleryGrid-v1", label: "갤러리", emoji: "🖼️" },
   { family: "ReviewCarousel", type: "ReviewCarousel-v1", label: "리뷰", emoji: "💬" },
+  { family: "BlogReviews", type: "BlogReviews-v1", label: "블로그 후기", emoji: "📝" },
   { family: "BusinessHours", type: "BusinessHours-v1", label: "영업시간", emoji: "🕒" },
   { family: "MapBlock", type: "MapBlock-v1", label: "지도", emoji: "📍" },
   { family: "ContactBlock", type: "ContactBlock-v1", label: "연락처", emoji: "📞" },

@@ -85,7 +85,8 @@ export type BlockComponentType =
   | "ContactBlock-v1"
   | "AnnouncementBlock-v1"
   | "PriceList-v1"
-  | "BusinessHours-v1";
+  | "BusinessHours-v1"
+  | "BlogReviews-v1";
 
 export interface SiteBlock {
   blockId: string;

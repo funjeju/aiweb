@@ -19,6 +19,7 @@ import { CTABannerV2 } from "./cta/CTABannerV2";
 import { ContactBlockV1 } from "./contact/ContactBlockV1";
 import { PriceListV1 } from "./menu/PriceListV1";
 import { BusinessHoursV1 } from "./contact/BusinessHoursV1";
+import { BlogReviewsV1 } from "./blog/BlogReviewsV1";
 
 interface BlockRendererProps {
   block: SiteBlock;
@@ -52,6 +53,7 @@ export function BlockRenderer({ block, site, isEditing, onEdit }: BlockRendererP
     case "ContactBlock-v1": return <ContactBlockV1 {...props} />;
     case "PriceList-v1": return <PriceListV1 {...props} />;
     case "BusinessHours-v1": return <BusinessHoursV1 {...props} />;
+    case "BlogReviews-v1": return <BlogReviewsV1 {...props} />;
     default: return null;
   }
 }
