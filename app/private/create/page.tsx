@@ -59,7 +59,8 @@ export default function PrivateCreatePage() {
       };
       await createPersonal(data);
       router.push(`/p/${id}`);
-    } catch {
+    } catch (err) {
+      console.error("personal create failed:", err);
       setError("생성에 실패했습니다. 다시 시도해주세요.");
       setStep("info");
     }

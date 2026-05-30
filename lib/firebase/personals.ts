@@ -19,7 +19,9 @@ export async function getPersonalsByOwner(ownerId: string): Promise<PersonalSche
 }
 
 export async function createPersonal(p: PersonalSchema): Promise<void> {
-  await setDoc(doc(db, COLLECTION, p.id), { ...p, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  // Firestore는 undefined 값을 저장하지 못하므로 직렬화로 제거한다.
+  const clean = JSON.parse(JSON.stringify(p));
+  await setDoc(doc(db, COLLECTION, p.id), { ...clean, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
 }
 
 export async function updatePersonal(id: string, data: Partial<PersonalSchema>): Promise<void> {
