@@ -173,7 +173,7 @@ function SiteCard({ site, onDelete }: { site: SiteSchema; onDelete: () => void }
         <p className="text-xs text-gray-400 truncate">{site.merchantInfo.category}</p>
       </div>
       <div className="flex items-center gap-1 ml-4">
-        <a href={`${appUrl}/site/${site.siteId}`} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-gray-100 rounded-lg" title="미리보기">
+        <a href={`${appUrl}/${site.siteId}`} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-gray-100 rounded-lg" title="미리보기">
           <ExternalLink size={16} className="text-gray-500" />
         </a>
         <Link href={`/editor/${site.siteId}`} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-sm rounded-xl font-semibold hover:bg-gray-700">

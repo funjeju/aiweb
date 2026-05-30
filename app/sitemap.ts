@@ -23,7 +23,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       const data = d.data();
       const updated = data.updatedAt?.toDate?.() ?? new Date();
       return {
-        url: `${base}/site/${d.id}`,
+        url: `${base}/${d.id}`,
         lastModified: updated,
         changeFrequency: "weekly" as const,
         priority: 0.8,

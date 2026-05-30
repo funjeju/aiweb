@@ -61,7 +61,7 @@ function BusinessCard({ site, siteId }: { site: SiteSchema; siteId: string }) {
   const theme = getThemeTokens(site.designTokens.themeId);
   const cardRef = useRef<HTMLDivElement>(null);
   const appUrl = getAppUrl();
-  const siteUrl = `${appUrl}/site/${siteId}`;
+  const siteUrl = `${appUrl}/${siteId}`;
 
   const downloadCard = async () => {
     const { default: html2canvas } = await import("html2canvas");

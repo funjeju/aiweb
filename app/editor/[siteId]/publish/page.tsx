@@ -49,7 +49,7 @@ export default function PublishPage() {
     setPublished(false);
   };
 
-  const siteUrl = `${appUrl}/site/${siteId}`;
+  const siteUrl = `${appUrl}/${siteId}`;
 
   const copyUrl = () => {
     navigator.clipboard.writeText(siteUrl);
@@ -125,7 +125,7 @@ export default function PublishPage() {
           <p className="font-bold text-gray-900 mb-1">홈페이지 주소</p>
           <p className="text-xs text-gray-400 mb-4">고객에게 공유할 링크예요</p>
           <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 mb-3">
-            <span className="text-sm text-gray-400 flex-shrink-0">{appUrl}/site/</span>
+            <span className="text-sm text-gray-400 flex-shrink-0">{appUrl}/</span>
             <span className="text-sm font-semibold text-gray-800">{siteId}</span>
           </div>
           <p className="text-xs text-gray-400 text-center">* 커스텀 도메인은 추후 지원 예정</p>

@@ -69,7 +69,7 @@ export function MainMap() {
         const el = document.createElement("div");
         el.style.cssText = `transform:translate(-50%,-100%);cursor:pointer;`;
         el.innerHTML = `<div style="background:${color};color:#fff;font-size:11px;font-weight:700;padding:4px 8px;border-radius:12px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.25);">${site.merchantInfo.name}</div><div style="width:8px;height:8px;background:${color};transform:rotate(45deg);margin:-4px auto 0;"></div>`;
-        el.onclick = () => window.open(`${appUrl}/site/${site.siteId}`, "_blank");
+        el.onclick = () => window.open(`${appUrl}/${site.siteId}`, "_blank");
         const overlay = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 1 });
         overlay.setMap(map);
         bounds.extend(pos);

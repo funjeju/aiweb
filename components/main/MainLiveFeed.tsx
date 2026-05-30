@@ -59,7 +59,7 @@ export function MainLiveFeed() {
           return (
             <a
               key={site.siteId}
-              href={`${appUrl}/site/${site.siteId}`}
+              href={`${appUrl}/${site.siteId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="group rounded-2xl overflow-hidden bg-white border border-gray-200 hover:shadow-lg transition-shadow"

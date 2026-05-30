@@ -5,8 +5,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// 루트 경로와 충돌하면 안 되는 예약어 (siteId가 이것과 같으면 안 됨)
+export const RESERVED_SLUGS = new Set([
+  "admin", "api", "create", "dashboard", "editor", "login", "signup",
+  "tools", "site", "sitemap.xml", "robots.txt", "favicon.ico", "_next",
+]);
+
 export function generateSiteId(name: string): string {
-  // siteId는 URL 경로·Firestore 문서ID·서브도메인으로 쓰이므로 영숫자만 허용.
+  // siteId는 URL 경로(123.com/{siteId})·Firestore 문서ID로 쓰이므로 영숫자만 허용.
   // 한글 등은 제거하고, 남는 게 없으면 "site"를 기본 prefix로 사용.
   const base = name
     .toLowerCase()
@@ -15,7 +21,10 @@ export function generateSiteId(name: string): string {
     .replace(/^-|-$/g, "")
     .slice(0, 30);
   const suffix = Math.random().toString(36).slice(2, 8);
-  return base ? `${base}-${suffix}` : `site-${suffix}`;
+  // 랜덤 접미사가 항상 붙으므로 예약어와 정확히 같아질 일은 없지만,
+  // base가 비었거나 예약어면 안전하게 prefix를 둔다.
+  const safeBase = base && !RESERVED_SLUGS.has(base) ? base : "site";
+  return `${safeBase}-${suffix}`;
 }
 
 export function slugify(text: string): string {

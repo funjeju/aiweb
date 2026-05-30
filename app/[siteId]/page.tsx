@@ -43,7 +43,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!site) return { title: "Not Found" };
 
   const m = site.merchantInfo;
-  const url = `${getAppUrl()}/site/${siteId}`;
+  const url = `${getAppUrl()}/${siteId}`;
   const title = m.category ? `${m.name} | ${m.category}` : m.name;
   const description = m.description || `${m.name}${m.address ? ` · ${m.address}` : ""}`;
   const images = site.contentAssets.heroImage ? [site.contentAssets.heroImage] : [];
@@ -76,7 +76,7 @@ export default async function SitePage({ params }: Props) {
   const site = await getSite(siteId);
   if (!site) notFound();
 
-  const url = `${getAppUrl()}/site/${siteId}`;
+  const url = `${getAppUrl()}/${siteId}`;
   const jsonLd = buildLocalBusinessJsonLd(site, url);
 
   return (
