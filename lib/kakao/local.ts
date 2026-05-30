@@ -44,32 +44,44 @@ export async function searchKakaoPlace(query: string, region?: string): Promise<
     return null;
   }
 
+  const places = await searchKakaoPlaces(query, region, 1);
+  return places[0] ?? null;
+}
+
+function toPlace(doc: KakaoDoc): KakaoPlace {
+  return {
+    name: doc.place_name,
+    category: doc.category_group_name || simplifyCategory(doc.category_name),
+    address: doc.road_address_name || doc.address_name || "",
+    phone: doc.phone || "",
+    lat: Number(doc.y),
+    lng: Number(doc.x),
+    placeUrl: doc.place_url || "",
+  };
+}
+
+/** 상호/장소명으로 여러 후보를 검색한다 (후보 선택 UI용). */
+export async function searchKakaoPlaces(query: string, region?: string, size = 8): Promise<KakaoPlace[]> {
+  const key = getKakaoRestKey();
+  if (!key) {
+    console.warn("KAKAO_REST_API_KEY not set");
+    return [];
+  }
+
   const q = [region, query].filter(Boolean).join(" ").trim();
-  const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}&size=5`;
+  if (!q) return [];
+  const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}&size=${size}`;
 
   try {
-    const res = await fetch(url, {
-      headers: { Authorization: `KakaoAK ${key}` },
-    });
+    const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } });
     if (!res.ok) {
       console.error("kakao local api error:", res.status, await res.text());
-      return null;
+      return [];
     }
     const data = (await res.json()) as { documents: KakaoDoc[] };
-    const doc = data.documents?.[0];
-    if (!doc) return null;
-
-    return {
-      name: doc.place_name,
-      category: doc.category_group_name || simplifyCategory(doc.category_name),
-      address: doc.road_address_name || doc.address_name || "",
-      phone: doc.phone || "",
-      lat: Number(doc.y),
-      lng: Number(doc.x),
-      placeUrl: doc.place_url || "",
-    };
+    return (data.documents ?? []).map(toPlace);
   } catch (err) {
     console.error("kakao local search failed:", err);
-    return null;
+    return [];
   }
 }

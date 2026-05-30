@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store/authStore";
-import { ChevronRight, Upload, Store, Sparkles, ArrowLeft, Loader2 } from "lucide-react";
+import { ChevronRight, Store, Sparkles, ArrowLeft, Loader2, Search, MapPin, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SiteType } from "@/lib/types/site";
+import type { KakaoPlace } from "@/lib/kakao/local";
 
 const SITE_TYPES: Array<{ id: SiteType; label: string; emoji: string; desc: string }> = [
   { id: "cafe", label: "카페", emoji: "☕", desc: "카페, 베이커리, 디저트" },
@@ -23,8 +24,6 @@ interface FormData {
   description: string;
   address: string;
   phone: string;
-  naverPlaceUrl: string;
-  instagramUrl: string;
 }
 
 export default function CreatePage() {
@@ -37,65 +36,60 @@ export default function CreatePage() {
     description: "",
     address: "",
     phone: "",
-    naverPlaceUrl: "",
-    instagramUrl: "",
   });
   const [error, setError] = useState("");
-  const [scraping, setScraping] = useState(false);
-  const [scrapeMsg, setScrapeMsg] = useState("");
+
+  // 장소 후보 검색
+  const [searchQuery, setSearchQuery] = useState("");
+  const [candidates, setCandidates] = useState<KakaoPlace[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState<KakaoPlace | null>(null);
 
   const handleTypeSelect = (type: SiteType) => {
     setForm((p) => ({ ...p, siteType: type }));
     setStep("info");
   };
 
-  const handleScrape = async () => {
-    const url = form.naverPlaceUrl.trim();
-    if (!url) return;
-    setScraping(true);
-    setScrapeMsg("");
+  const handleSearch = async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setSearching(true);
+    setSearched(true);
+    setCandidates([]);
     try {
-      const res = await fetch("/api/scrape", {
+      const res = await fetch("/api/place-search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ query: q }),
       });
-      const { data, scraped, reason } = await res.json();
-      // 실제로 채워진 필드가 있는지 직접 확인 (빈 값이면 성공이라고 거짓말하지 않는다)
-      const filled = data && (data.name || data.address || data.phone || data.description);
-
-      if (scraped && filled) {
-        const got: string[] = [];
-        if (data.name) got.push("상호명");
-        if (data.address) got.push("주소");
-        if (data.phone) got.push("전화");
-        if (data.description) got.push("소개");
-        setForm((p) => ({
-          ...p,
-          businessName: data.name || p.businessName,
-          description: data.description || p.description,
-          address: data.address || p.address,
-          phone: data.phone || p.phone,
-        }));
-        setScrapeMsg(`불러온 정보: ${got.join(", ")}. 확인 후 수정하세요.`);
-      } else {
-        const msg = reason === "blocked-or-empty"
-          ? "네이버가 자동 수집을 차단했어요. 정보를 직접 입력해주세요."
-          : reason === "no-place-id"
-          ? "네이버 플레이스 URL이 아닌 것 같아요. 직접 입력해주세요."
-          : "자동 수집된 정보가 없어요. 직접 입력해주세요.";
-        setScrapeMsg(msg);
-      }
+      const { places } = await res.json();
+      setCandidates(places || []);
     } catch {
-      setScrapeMsg("불러오기에 실패했어요. 직접 입력해주세요.");
+      setCandidates([]);
     } finally {
-      setScraping(false);
+      setSearching(false);
     }
+  };
+
+  const selectPlace = (place: KakaoPlace) => {
+    setSelectedPlace(place);
+    setForm((p) => ({
+      ...p,
+      businessName: place.name,
+      address: place.address || p.address,
+      phone: place.phone || p.phone,
+    }));
+    setCandidates([]);
+  };
+
+  const clearSelection = () => {
+    setSelectedPlace(null);
   };
 
   const handleGenerate = async () => {
     if (!form.businessName.trim()) {
-      setError("상호명을 입력해주세요");
+      setError("상호명을 입력하거나 가게를 검색해주세요");
       return;
     }
     setError("");
@@ -112,6 +106,8 @@ export default function CreatePage() {
           address: form.address,
           phone: form.phone,
           ownerId: user?.uid ?? "anonymous",
+          coordinates: selectedPlace ? { lat: selectedPlace.lat, lng: selectedPlace.lng } : undefined,
+          placeUrl: selectedPlace?.placeUrl,
         }),
       });
 
@@ -128,16 +124,12 @@ export default function CreatePage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-white px-6">
         <div className="flex flex-col items-center gap-6 text-center">
-          <div className="relative">
-            <div className="w-20 h-20 rounded-full bg-indigo-50 flex items-center justify-center">
-              <Sparkles className="w-10 h-10 text-indigo-500 animate-pulse" />
-            </div>
+          <div className="w-20 h-20 rounded-full bg-indigo-50 flex items-center justify-center">
+            <Sparkles className="w-10 h-10 text-indigo-500 animate-pulse" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
-              AI가 홈페이지를 만들고 있어요
-            </h2>
-            <p className="text-gray-500 text-sm">보통 30초 내로 완성됩니다</p>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">AI가 홈페이지를 만들고 있어요</h2>
+            <p className="text-gray-500 text-sm">실제 정보를 검색해 채우는 중 · 보통 30초 내 완성</p>
           </div>
           <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
         </div>
@@ -149,12 +141,8 @@ export default function CreatePage() {
     <div className="min-h-screen bg-white">
       <div className="max-w-lg mx-auto px-6 py-12">
         {step === "info" && (
-          <button
-            onClick={() => setStep("type")}
-            className="flex items-center gap-1.5 text-sm text-gray-500 mb-8"
-          >
-            <ArrowLeft size={16} />
-            업종 선택
+          <button onClick={() => setStep("type")} className="flex items-center gap-1.5 text-sm text-gray-500 mb-8">
+            <ArrowLeft size={16} />업종 선택
           </button>
         )}
 
@@ -165,19 +153,13 @@ export default function CreatePage() {
                 <Store className="w-5 h-5 text-indigo-500" />
                 <span className="text-xs font-semibold text-indigo-500 uppercase tracking-wider">업종 선택</span>
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                어떤 가게인가요?
-              </h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">어떤 가게인가요?</h1>
               <p className="text-gray-500 text-sm">업종에 맞는 최적화된 홈페이지를 만들어드려요</p>
             </div>
-
             <div className="space-y-3">
               {SITE_TYPES.map((type) => (
-                <button
-                  key={type.id}
-                  onClick={() => handleTypeSelect(type.id)}
-                  className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all text-left"
-                >
+                <button key={type.id} onClick={() => handleTypeSelect(type.id)}
+                  className="w-full flex items-center justify-between p-4 rounded-2xl border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all text-left">
                   <div className="flex items-center gap-4">
                     <span className="text-2xl">{type.emoji}</span>
                     <div>
@@ -197,113 +179,109 @@ export default function CreatePage() {
             <div className="mb-8">
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="w-5 h-5 text-indigo-500" />
-                <span className="text-xs font-semibold text-indigo-500 uppercase tracking-wider">기본 정보</span>
+                <span className="text-xs font-semibold text-indigo-500 uppercase tracking-wider">가게 찾기</span>
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                가게 정보를 알려주세요
-              </h1>
-              <p className="text-gray-500 text-sm">입력할수록 더 좋은 홈페이지가 만들어져요</p>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">가게를 검색하세요</h1>
+              <p className="text-gray-500 text-sm">상호명으로 찾으면 주소·전화·위치를 자동으로 채워드려요</p>
             </div>
 
             <div className="space-y-4">
+              {/* 가게 검색 */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  상호명 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="예: 풍차로 가는 길"
-                  value={form.businessName}
-                  onChange={(e) => setForm((p) => ({ ...p, businessName: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-gray-900 placeholder-gray-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  소개 문구
-                </label>
-                <textarea
-                  placeholder="가게를 한 줄로 소개해주세요"
-                  value={form.description}
-                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                  rows={3}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-gray-900 placeholder-gray-400 resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  전화번호
-                </label>
-                <input
-                  type="tel"
-                  placeholder="010-0000-0000"
-                  value={form.phone}
-                  onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-gray-900 placeholder-gray-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  주소
-                </label>
-                <input
-                  type="text"
-                  placeholder="주소를 입력하세요"
-                  value={form.address}
-                  onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-gray-900 placeholder-gray-400"
-                />
-              </div>
-
-              <div className="pt-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">자동 채우기 (선택)</p>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                    네이버 플레이스 URL
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="url"
-                      placeholder="https://naver.me/..."
-                      value={form.naverPlaceUrl}
-                      onChange={(e) => setForm((p) => ({ ...p, naverPlaceUrl: e.target.value }))}
-                      className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-gray-900 placeholder-gray-400"
-                    />
-                    <button
-                      onClick={handleScrape}
-                      disabled={scraping || !form.naverPlaceUrl.trim()}
-                      className={cn(
-                        "flex-shrink-0 px-4 rounded-xl font-semibold text-sm transition-colors flex items-center gap-1.5",
-                        scraping || !form.naverPlaceUrl.trim()
-                          ? "bg-gray-100 text-gray-400"
-                          : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
-                      )}
-                    >
-                      {scraping ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                      불러오기
-                    </button>
-                  </div>
-                  {scrapeMsg && <p className="text-xs text-indigo-500 mt-1.5">{scrapeMsg}</p>}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="예: 우진해장국"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+                    className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-gray-900 placeholder-gray-400"
+                  />
+                  <button
+                    onClick={handleSearch}
+                    disabled={searching || !searchQuery.trim()}
+                    className={cn(
+                      "flex-shrink-0 px-5 rounded-xl font-semibold text-sm flex items-center gap-1.5 transition-colors",
+                      searching || !searchQuery.trim() ? "bg-gray-100 text-gray-400" : "bg-indigo-500 text-white hover:bg-indigo-600"
+                    )}
+                  >
+                    {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                    검색
+                  </button>
                 </div>
+
+                {/* 후보 목록 */}
+                {candidates.length > 0 && (
+                  <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
+                    {candidates.map((place, i) => (
+                      <button
+                        key={`${place.placeUrl}-${i}`}
+                        onClick={() => selectPlace(place)}
+                        className="w-full text-left px-4 py-3 hover:bg-indigo-50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-sm text-gray-900">{place.name}</p>
+                          {place.category && <span className="text-[11px] text-gray-400 flex-shrink-0">{place.category}</span>}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                          <MapPin size={11} className="flex-shrink-0" />{place.address}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {searched && !searching && candidates.length === 0 && !selectedPlace && (
+                  <p className="text-xs text-gray-400 mt-2">검색 결과가 없어요. 아래에 직접 입력하셔도 됩니다.</p>
+                )}
               </div>
 
-              {error && (
-                <p className="text-sm text-red-500">{error}</p>
+              {/* 선택된 장소 */}
+              {selectedPlace && (
+                <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50 p-4 flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Check size={14} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900">{selectedPlace.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{selectedPlace.address}</p>
+                    {selectedPlace.phone && <p className="text-xs text-gray-500">{selectedPlace.phone}</p>}
+                  </div>
+                  <button onClick={clearSelection} className="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0">변경</button>
+                </div>
               )}
 
-              <button
-                onClick={handleGenerate}
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">직접 입력 / 수정</p>
+
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">상호명 <span className="text-red-500">*</span></label>
+                <input type="text" placeholder="상호명" value={form.businessName}
+                  onChange={(e) => setForm((p) => ({ ...p, businessName: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-gray-900 placeholder-gray-400 mb-3" />
+
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">소개 문구</label>
+                <textarea placeholder="가게를 한 줄로 소개해주세요 (비우면 AI가 채웁니다)" value={form.description}
+                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} rows={2}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-gray-900 placeholder-gray-400 resize-none mb-3" />
+
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">전화번호</label>
+                <input type="tel" placeholder="010-0000-0000" value={form.phone}
+                  onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-gray-900 placeholder-gray-400 mb-3" />
+
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">주소</label>
+                <input type="text" placeholder="주소" value={form.address}
+                  onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:outline-none text-gray-900 placeholder-gray-400" />
+              </div>
+
+              {error && <p className="text-sm text-red-500">{error}</p>}
+
+              <button onClick={handleGenerate} disabled={!form.businessName.trim()}
                 className={cn(
-                  "w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-base mt-4",
+                  "w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-base mt-2",
                   form.businessName.trim() ? "bg-indigo-500 hover:bg-indigo-600" : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                )}
-                disabled={!form.businessName.trim()}
-              >
-                <Sparkles size={18} />
-                AI로 홈페이지 만들기
+                )}>
+                <Sparkles size={18} />AI로 홈페이지 만들기
               </button>
             </div>
           </>

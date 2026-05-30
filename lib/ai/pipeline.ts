@@ -30,6 +30,9 @@ interface AIGenerationInput {
   heroImage?: string;
   galleryImages?: string[];
   ownerId: string;
+  // 후보 선택 플로우에서 사용자가 고른 장소 정보 (이미 확정된 값)
+  coordinates?: { lat: number; lng: number };
+  placeUrl?: string;
 }
 
 interface AIGenerationResult {
@@ -48,18 +51,20 @@ interface AIGenerationResult {
 export async function generateSiteFromInput(input: AIGenerationInput): Promise<SiteSchema> {
   let searchedMenu: MenuItem[] = [];
   let searchedReviews: Array<{ author: string; rating: number; text: string }> = [];
-  // 카카오에서 가져온 좌표 (지도 렌더링용)
-  let coordinates: { lat: number; lng: number } | undefined;
+  // 좌표 (지도 렌더링용) — 후보 선택에서 받았으면 그대로, 아니면 카카오 검색으로
+  let coordinates: { lat: number; lng: number } | undefined = input.coordinates;
 
   // ── 1단계: 카카오 로컬 검색 — 한국 가게의 주소/전화/좌표/카테고리 (정확) ──
-  if (!input.address || !input.phone) {
+  // 후보 선택으로 이미 좌표+주소가 확정됐으면 재검색 생략
+  const alreadyResolved = !!(input.coordinates && input.address);
+  if (!alreadyResolved && (!input.address || !input.phone)) {
     try {
       const place = await searchKakaoPlace(input.businessName, input.address);
       if (place) {
         input.address = input.address || place.address;
         input.phone = input.phone || place.phone;
         if (!input.category && place.category) input.category = place.category;
-        if (place.lat && place.lng) coordinates = { lat: place.lat, lng: place.lng };
+        if (place.lat && place.lng) coordinates = coordinates || { lat: place.lat, lng: place.lng };
       }
     } catch (err) {
       console.error("kakao local search failed:", err);
@@ -161,7 +166,7 @@ export async function generateSiteFromInput(input: AIGenerationInput): Promise<S
       businessHours: input.businessHours || "",
       ...(coordinates ? { coordinates } : {}),
     },
-    externalLinks: {},
+    externalLinks: input.placeUrl ? { naverPlace: input.placeUrl } : {},
     designTokens: {
       themeId: ai.themeId ?? "warm-ocean",
       primaryColor: "",

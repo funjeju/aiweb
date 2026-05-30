@@ -19,6 +19,8 @@ export async function POST(req: NextRequest) {
       heroImage,
       galleryImages,
       ownerId,
+      coordinates,
+      placeUrl,
     } = body;
 
     if (!businessName || !ownerId) {
@@ -37,6 +39,8 @@ export async function POST(req: NextRequest) {
       heroImage,
       galleryImages,
       ownerId,
+      coordinates,
+      placeUrl,
     });
 
     // siteId 자체가 고유한 영숫자 식별자이므로 subdomain으로 그대로 사용.
