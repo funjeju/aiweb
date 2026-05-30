@@ -39,6 +39,13 @@ export async function getSitesByOwner(ownerId: string): Promise<SiteSchema[]> {
   return snap.docs.map((d) => d.data() as SiteSchema);
 }
 
+/** 공개된 모든 사이트 (메인 지도·피드용). */
+export async function getPublishedSites(max = 100): Promise<SiteSchema[]> {
+  const q = query(collection(db, SITES_COLLECTION), where("published", "==", true));
+  const snap = await getDocs(q);
+  return snap.docs.slice(0, max).map((d) => d.data() as SiteSchema);
+}
+
 export async function createSite(site: SiteSchema): Promise<void> {
   const ref = doc(db, SITES_COLLECTION, site.siteId);
   await setDoc(ref, { ...site, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
