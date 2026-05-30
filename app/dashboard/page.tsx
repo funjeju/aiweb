@@ -5,25 +5,53 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSitesByOwner, deleteSite } from "@/lib/firebase/sites";
 import { useAuthStore } from "@/lib/store/authStore";
+import { canManageSites } from "@/lib/firebase/users";
 import { logout } from "@/lib/firebase/auth";
 import type { SiteSchema } from "@/lib/types/site";
 import { getAppUrl } from "@/lib/utils";
 import { Plus, Globe, Pencil, ExternalLink, Sparkles, LogOut, User, MoreVertical, Trash2, Layers } from "lucide-react";
 
 export default function DashboardPage() {
-  const { user, loading: authLoading } = useAuthStore();
+  const { user, profile, loading: authLoading } = useAuthStore();
   const router = useRouter();
   const [sites, setSites] = useState<SiteSchema[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const canManage = canManageSites(profile);
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) { router.replace("/login"); return; }
+    // 프로필 로드 대기 (AuthProvider가 채움)
+    if (profile === null) return;
+    if (!canManage) { setLoading(false); return; }
     getSitesByOwner(user.uid).then((s) => {
       setSites(s);
       setLoading(false);
     });
-  }, [user, authLoading, router]);
+  }, [user, profile, authLoading, canManage, router]);
+
+  // 로그인했지만 권한이 없는 경우
+  if (!authLoading && user && profile !== null && !canManage) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-6">
+        <div className="max-w-sm text-center">
+          <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
+            <Sparkles className="w-7 h-7 text-amber-400" />
+          </div>
+          <h2 className="text-lg font-bold text-gray-900 mb-2">아직 권한이 없어요</h2>
+          <p className="text-sm text-gray-500 mb-6">
+            홈페이지 생성·관리는 관리자 승인 후 이용할 수 있습니다.
+            <br />승인을 요청하려면 운영자에게 문의해주세요.
+          </p>
+          <button onClick={() => { logout(); router.push("/"); }}
+            className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+            로그아웃
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleLogout = async () => {
     await logout();

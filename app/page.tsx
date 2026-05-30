@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/lib/store/authStore";
+import { canManageSites } from "@/lib/firebase/users";
 import { Sparkles, Radio, Map as MapIcon, Wand2, Video, LayoutDashboard, LogIn, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MainLiveFeed } from "@/components/main/MainLiveFeed";
@@ -20,8 +21,9 @@ const TABS: Array<{ id: MainTab; label: string; icon: React.ReactNode }> = [
 ];
 
 export default function MainPage() {
-  const { user } = useAuthStore();
+  const { user, profile } = useAuthStore();
   const [tab, setTab] = useState<MainTab>("feed");
+  const canManage = canManageSites(profile);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -38,10 +40,13 @@ export default function MainPage() {
           <div className="flex items-center gap-2">
             {user ? (
               <>
-                <Link href="/dashboard" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-600">
-                  <LayoutDashboard size={15} />대시보드
-                </Link>
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden">
+                {/* 관리자 또는 승인된 사용자만 대시보드 노출 */}
+                {canManage && (
+                  <Link href="/dashboard" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-600">
+                    <LayoutDashboard size={15} />대시보드
+                  </Link>
+                )}
+                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden" title={profile?.email || ""}>
                   {user.photoURL
                     ? <img src={user.photoURL} alt="" className="w-8 h-8" />
                     : <User size={15} className="text-indigo-500" />}
