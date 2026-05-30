@@ -1,5 +1,5 @@
 export type SiteRole = "owner" | "agency" | "admin";
-export type SiteType = "cafe" | "restaurant" | "beauty" | "stay" | "general";
+export type SiteType = "cafe" | "restaurant" | "beauty" | "stay" | "attraction" | "general";
 export type GenerationModeType = "zero-input" | "low-input" | "agency";
 
 export type GenerationSource =
@@ -86,7 +86,8 @@ export type BlockComponentType =
   | "AnnouncementBlock-v1"
   | "PriceList-v1"
   | "BusinessHours-v1"
-  | "BlogReviews-v1";
+  | "BlogReviews-v1"
+  | "AttractionInfo-v1";
 
 export interface SiteBlock {
   blockId: string;
@@ -155,6 +156,13 @@ export const TEMPLATES: TemplateDefinition[] = [
     siteType: "stay",
     blocks: ["HeroCentered-v3", "GalleryGrid-v1", "FeaturedCard-v3", "CTABanner-v2", "ReviewCarousel-v1", "MapBlock-v1"],
     description: "공간 경험 중심, 예약 유도 레이아웃",
+  },
+  {
+    id: "attraction-default",
+    name: "관광지/오름 기본",
+    siteType: "attraction",
+    blocks: ["HeroCentered-v2", "AttractionInfo-v1", "GalleryGrid-v1", "MapBlock-v1", "BlogReviews-v1"],
+    description: "탐방 정보(난이도/소요시간/주차) 중심 관광지 레이아웃",
   },
 ];
 

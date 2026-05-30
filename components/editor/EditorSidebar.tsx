@@ -480,6 +480,7 @@ const BLOCK_VARIATIONS: Record<string, BlockComponentType[]> = {
   PriceList: ["PriceList-v1"],
   BusinessHours: ["BusinessHours-v1"],
   BlogReviews: ["BlogReviews-v1"],
+  AttractionInfo: ["AttractionInfo-v1"],
 };
 
 function getBlockFamily(componentType: string): string {
@@ -494,6 +495,7 @@ const ADDABLE_BLOCKS: Array<{ family: string; type: BlockComponentType; label: s
   { family: "GalleryGrid", type: "GalleryGrid-v1", label: "갤러리", emoji: "🖼️" },
   { family: "ReviewCarousel", type: "ReviewCarousel-v1", label: "리뷰", emoji: "💬" },
   { family: "BlogReviews", type: "BlogReviews-v1", label: "블로그 후기", emoji: "📝" },
+  { family: "AttractionInfo", type: "AttractionInfo-v1", label: "탐방 정보", emoji: "⛰️" },
   { family: "BusinessHours", type: "BusinessHours-v1", label: "영업시간", emoji: "🕒" },
   { family: "MapBlock", type: "MapBlock-v1", label: "지도", emoji: "📍" },
   { family: "ContactBlock", type: "ContactBlock-v1", label: "연락처", emoji: "📞" },

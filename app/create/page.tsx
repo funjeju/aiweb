@@ -13,6 +13,7 @@ const SITE_TYPES: Array<{ id: SiteType; label: string; emoji: string; desc: stri
   { id: "restaurant", label: "식당", emoji: "🍽️", desc: "한식, 중식, 양식, 이자카야" },
   { id: "beauty", label: "미용실 / 네일", emoji: "✂️", desc: "헤어, 네일, 피부관리" },
   { id: "stay", label: "숙박", emoji: "🏡", desc: "펜션, 게스트하우스, 풀빌라" },
+  { id: "attraction", label: "관광지 / 오름", emoji: "⛰️", desc: "오름, 명소, 관광 스팟" },
   { id: "general", label: "기타", emoji: "🏪", desc: "그 외 모든 업종" },
 ];
 

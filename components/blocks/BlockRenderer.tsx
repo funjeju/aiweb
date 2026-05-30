@@ -20,6 +20,7 @@ import { ContactBlockV1 } from "./contact/ContactBlockV1";
 import { PriceListV1 } from "./menu/PriceListV1";
 import { BusinessHoursV1 } from "./contact/BusinessHoursV1";
 import { BlogReviewsV1 } from "./blog/BlogReviewsV1";
+import { AttractionInfoV1 } from "./attraction/AttractionInfoV1";
 
 interface BlockRendererProps {
   block: SiteBlock;
@@ -54,6 +55,7 @@ export function BlockRenderer({ block, site, isEditing, onEdit }: BlockRendererP
     case "PriceList-v1": return <PriceListV1 {...props} />;
     case "BusinessHours-v1": return <BusinessHoursV1 {...props} />;
     case "BlogReviews-v1": return <BlogReviewsV1 {...props} />;
+    case "AttractionInfo-v1": return <AttractionInfoV1 {...props} />;
     default: return null;
   }
 }

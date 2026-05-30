@@ -45,6 +45,7 @@ interface AIGenerationResult {
   featuredItems?: Array<{ title: string; description: string; badge?: string }>;
   reviewTitle?: string;
   reviews?: Array<{ author: string; rating: number; text: string }>;
+  attractionInfo?: Array<{ label: string; value: string }>;
   layout?: Array<{ componentType: BlockComponentType }>;
 }
 
@@ -140,6 +141,9 @@ export async function generateSiteFromInput(input: AIGenerationInput): Promise<S
       } else if (b.componentType.startsWith("Review")) {
         data.title = ai.reviewTitle || "리뷰";
         data.reviews = ai.reviews || [];
+      } else if (b.componentType.startsWith("AttractionInfo")) {
+        data.title = "탐방 정보";
+        data.items = (ai.attractionInfo || []).filter((it) => it.label && it.value);
       }
 
       return { blockId, componentType: b.componentType, data, visible: true };

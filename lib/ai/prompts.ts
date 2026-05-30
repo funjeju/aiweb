@@ -72,9 +72,14 @@ export function buildGenerationPrompt(input: {
 - 메뉴 데이터: ${hasMenu ? "있음 → featuredItems에 입력된 메뉴만 반영" : "★없음 → featuredItems는 반드시 빈 배열 []. 메뉴를 지어내지 마라."}
 - heroTitle/heroSubtitle: 상호명과 업종에 어울리는 담백한 환영 문구만. 없는 사실 넣지 말 것.
 
+★ 관광지/오름(attraction) 처리:
+- 업종이 오름·관광지·명소면 siteType을 "attraction"으로 설정.
+- 이 경우 메뉴/가격 대신 "탐방 정보"를 attractionInfo에 담는다.
+  단, 난이도·소요시간·고도 등은 웹에서 확인된 사실만. 모르면 그 항목을 빼라(지어내기 금지).
+
 반환 형식 (JSON):
 {
-  "siteType": "cafe|restaurant|beauty|stay|general",
+  "siteType": "cafe|restaurant|beauty|stay|attraction|general",
   "themeId": "warm-ocean|jeju-warm|luxury-modern|minimal-clean|vintage-cozy|fresh-green",
   "heroTitle": "상호명 기반 짧은 제목",
   "heroSubtitle": "업종/소개 기반 한 줄 (없는 사실 금지)",
@@ -83,6 +88,10 @@ export function buildGenerationPrompt(input: {
   "featuredItems": [],
   "reviewTitle": "고객 후기",
   "reviews": [],
+  "attractionInfo": [
+    { "label": "난이도", "value": "" },
+    { "label": "소요시간", "value": "" }
+  ],
   "layout": [
     { "componentType": "HeroCentered-v2" },
     { "componentType": "MapBlock-v1" },
@@ -95,6 +104,7 @@ layout 구성 지시:
 - 기본 layout에는 Hero + Map + Contact + CTA만 포함한다 (사실 데이터 없이도 정직하게 채워지는 블록).
 - 메뉴 데이터가 있을 때만 FeaturedCard-v2 또는 MenuGrid-v1을 layout에 추가한다.
 - 리뷰 데이터가 있을 때만 ReviewCarousel-v1을 layout에 추가한다.
+- attraction이고 탐방 정보가 있으면 AttractionInfo-v1을 Hero 다음에 추가한다 (Contact/CTA 대신 BlogReviews-v1 권장).
 - 사장님이 나중에 에디터에서 사진/메뉴/리뷰를 직접 추가할 수 있으므로, 빈 콘텐츠 블록을 억지로 넣지 않는다.
 `.trim();
 }
