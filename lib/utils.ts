@@ -8,8 +8,19 @@ export function cn(...inputs: ClassValue[]) {
 // 루트 경로와 충돌하면 안 되는 예약어 (siteId가 이것과 같으면 안 됨)
 export const RESERVED_SLUGS = new Set([
   "admin", "api", "create", "dashboard", "editor", "login", "signup",
-  "tools", "site", "sitemap.xml", "robots.txt", "favicon.ico", "_next",
+  "tools", "site", "private", "p", "sitemap.xml", "robots.txt", "favicon.ico", "_next",
 ]);
+
+export function generatePersonalId(name: string): string {
+  const base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 24);
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return base ? `${base}-${suffix}` : `me-${suffix}`;
+}
 
 export function generateSiteId(name: string): string {
   // siteId는 URL 경로(123.com/{siteId})·Firestore 문서ID로 쓰이므로 영숫자만 허용.
