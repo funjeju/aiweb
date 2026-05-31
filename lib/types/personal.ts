@@ -54,6 +54,13 @@ export interface PersonalSchema {
   };
 
   sections: PersonalSection[];
+
+  /** 별자리 우주 모드 (개인 웹의 메인 컨셉). 있으면 우주 홈으로 렌더 */
+  universe?: {
+    color: string; // 좋아하는 색 (별자리 메인 컬러)
+    favoriteNumber: number; // 좋아하는 숫자 (시드)
+    menus: Array<{ id: string; label: string; icon: "profile" | "diary" | "gallery" }>;
+  };
 }
 
 export interface PersonaTypeDef {

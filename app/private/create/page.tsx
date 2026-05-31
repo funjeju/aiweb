@@ -20,6 +20,7 @@ export default function PrivateCreatePage() {
   const [form, setForm] = useState({
     name: "", tagline: "", role: "", bio: "", about: "",
     skills: "", email: "", github: "", instagram: "", linkedin: "",
+    color: "#a78bfa", favoriteNumber: "7",
   });
   const [projects, setProjects] = useState<Array<{ title: string; description: string; tags: string; link: string }>>([
     { title: "", description: "", tags: "", link: "" },
@@ -56,6 +57,16 @@ export default function PrivateCreatePage() {
           .map((p) => ({ id: crypto.randomUUID(), title: p.title, description: p.description, tags: p.tags, link: p.link || undefined })),
         contact: { email: form.email || undefined, message: "궁금한 점이 있으면 편하게 연락주세요." },
         sections: def.sections,
+        // 별자리 우주 모드 (개인 웹 메인 컨셉) — 이름+색+숫자로 고유 별자리
+        universe: {
+          color: form.color,
+          favoriteNumber: Number(form.favoriteNumber) || 7,
+          menus: [
+            { id: "profile", label: "내 소개", icon: "profile" },
+            { id: "diary", label: "다이어리", icon: "diary" },
+            { id: "gallery", label: "갤러리", icon: "gallery" },
+          ],
+        },
       };
       await createPersonal(data);
       router.push(`/p/${id}`);
@@ -123,6 +134,28 @@ export default function PrivateCreatePage() {
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-violet-400 focus:outline-none" />
                 </div>
               ))}
+              {/* 별자리 시드 — 색 + 숫자로 나만의 별자리 생성 */}
+              <div className="rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
+                <p className="text-sm font-semibold text-violet-700 mb-1">✨ 나만의 별자리</p>
+                <p className="text-xs text-gray-500 mb-3">이름 + 좋아하는 색 + 숫자로 세상에 하나뿐인 별자리가 만들어져요</p>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">좋아하는 색</label>
+                    <div className="flex items-center gap-2">
+                      <input type="color" value={form.color} onChange={(e) => up("color", e.target.value)}
+                        className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
+                      <input value={form.color} onChange={(e) => up("color", e.target.value)}
+                        className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-violet-400 focus:outline-none" />
+                    </div>
+                  </div>
+                  <div className="w-24">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">좋아하는 숫자</label>
+                    <input type="number" value={form.favoriteNumber} onChange={(e) => up("favoriteNumber", e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 focus:border-violet-400 focus:outline-none" />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">자기소개</label>
                 <textarea value={form.bio} onChange={(e) => up("bio", e.target.value)} rows={3} placeholder="간단한 소개를 적어주세요"

@@ -5,6 +5,7 @@ import { adminDb } from "@/lib/firebase/admin";
 import { getPersonalById } from "@/lib/firebase/personals";
 import type { PersonalSchema } from "@/lib/types/personal";
 import { PersonalSite } from "@/components/personal/PersonalSite";
+import { UniverseHome } from "@/components/universe/UniverseHome";
 
 export const runtime = "nodejs";
 export const revalidate = 3600;
@@ -44,5 +45,19 @@ export default async function PersonalPage({ params }: Props) {
   const { id } = await params;
   const p = await getPersonal(id);
   if (!p) notFound();
+
+  // 별자리 우주 모드면 우주 홈으로 렌더 (개인 웹 메인 컨셉)
+  if (p.universe) {
+    return (
+      <UniverseHome data={{
+        name: p.profile.name,
+        color: p.universe.color,
+        favoriteNumber: p.universe.favoriteNumber,
+        menus: p.universe.menus,
+        about: p.about || p.profile.bio,
+      }} />
+    );
+  }
+
   return <PersonalSite data={p} />;
 }
