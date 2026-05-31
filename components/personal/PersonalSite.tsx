@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import Image from "next/image";
 import type { PersonalSchema, PersonalSection } from "@/lib/types/personal";
 import { SECTION_LABEL } from "@/lib/types/personal";
 import { getThemeTokens } from "@/lib/design/tokens";
+import { useAuthStore } from "@/lib/store/authStore";
 import { cn } from "@/lib/utils";
-import { Github, Linkedin, Instagram, Twitter, Globe, Mail, Phone, ArrowUpRight, Menu, X } from "lucide-react";
+import { Github, Linkedin, Instagram, Twitter, Globe, Mail, Phone, ArrowUpRight, Menu, X, Pencil } from "lucide-react";
 
 function scrollToId(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -14,8 +16,10 @@ function scrollToId(id: string) {
 
 export function PersonalSite({ data }: { data: PersonalSchema }) {
   const theme = getThemeTokens(data.themeId);
+  const { user } = useAuthStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const sections = data.sections;
+  const isOwner = user?.uid === data.ownerId;
 
   const socials = data.profile.socials || {};
   const socialIcons: Array<{ key: keyof typeof socials; icon: React.ReactNode }> = [
@@ -63,6 +67,15 @@ export function PersonalSite({ data }: { data: PersonalSchema }) {
       <footer className="text-center py-8 text-xs" style={{ color: theme.textMuted, borderTop: `1px solid ${theme.border}` }}>
         © {new Date().getFullYear()} {data.profile.name}. All rights reserved.
       </footer>
+
+      {/* 소유자 편집 버튼 */}
+      {isOwner && (
+        <Link href={`/private/edit/${data.id}`}
+          className="fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-full text-white font-semibold shadow-lg"
+          style={{ backgroundColor: theme.primary }}>
+          <Pencil size={16} />편집
+        </Link>
+      )}
     </div>
   );
 }

@@ -1,15 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { Sparkles, ArrowRight, User, Camera, Heart, Palette } from "lucide-react";
+import { useAuthStore } from "@/lib/store/authStore";
+import { Sparkles, ArrowRight, User, Camera, Heart, Palette, LayoutDashboard } from "lucide-react";
 
 function scrollToId(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
 }
 
 export default function PrivateLandingPage() {
+  const { user } = useAuthStore();
   return (
     <div className="min-h-screen bg-white text-gray-900">
+      {/* 상단 바 */}
+      <header className="absolute top-0 left-0 right-0 z-10 px-6 h-16 flex items-center justify-between max-w-5xl mx-auto">
+        <Link href="/private" className="font-bold text-violet-600">My Page</Link>
+        {user && (
+          <Link href="/private/dashboard" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 backdrop-blur border border-violet-100 text-violet-600 text-sm font-semibold hover:bg-white">
+            <LayoutDashboard size={15} />내 페이지
+          </Link>
+        )}
+      </header>
+
       {/* Hero */}
       <section className="min-h-[90vh] flex flex-col items-center justify-center text-center px-6 bg-gradient-to-br from-violet-50 to-white">
         <div className="inline-flex items-center gap-2 bg-violet-100 text-violet-600 text-xs font-semibold px-4 py-1.5 rounded-full mb-6">
