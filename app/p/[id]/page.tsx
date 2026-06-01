@@ -56,7 +56,7 @@ export default async function PersonalPage({ params }: Props) {
       name: p.profile.name,
       color: p.universe.color,
       favoriteNumber: p.universe.favoriteNumber,
-      menus: p.universe.menus,
+      menus: p.universe.menus ?? [],
       about: p.about || p.profile.bio,
       style: p.universe.style,
       photo: p.profile.photo,

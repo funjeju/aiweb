@@ -177,19 +177,22 @@ function LayoutTab({
 }
 
 /* ─── BGM 탭 ─────────────────────────────────── */
+// 별도 오디오 인스턴스 없음 — 하단 BgmPlayer(단일 오디오)를 onToggleBgm으로 제어
 
 function BgmTab({
   personalId,
   bgm,
+  bgmPlaying,
+  onToggleBgm,
   onChange,
 }: {
   personalId: string;
   bgm: SettingsState["bgm"];
+  bgmPlaying: boolean;
+  onToggleBgm: () => void;
   onChange: (bgm: SettingsState["bgm"]) => void;
 }) {
   const [uploading, setUploading] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -198,25 +201,13 @@ function BgmTab({
     setUploading(true);
     try {
       const url = await uploadPersonalAudio(personalId, file);
-      onChange({ url, name: file.name.replace(/\.[^.]+$/, ""), autoPlay: bgm?.autoPlay ?? false });
+      const name = file.name.replace(/\.[^.]+$/, "");
+      onChange({ url, name, autoPlay: bgm?.autoPlay ?? false });
+    } catch {
+      alert("업로드에 실패했습니다.");
     } finally {
       setUploading(false);
       e.target.value = "";
-    }
-  };
-
-  const togglePlay = () => {
-    if (!bgm?.url) return;
-    if (!audioRef.current) {
-      audioRef.current = new Audio(bgm.url);
-      audioRef.current.loop = true;
-      audioRef.current.onended = () => setPlaying(false);
-    }
-    if (playing) {
-      audioRef.current.pause();
-      setPlaying(false);
-    } else {
-      audioRef.current.play().then(() => setPlaying(true)).catch(() => {});
     }
   };
 
@@ -229,23 +220,23 @@ function BgmTab({
 
       {bgm?.url ? (
         <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-3">
-          {/* 현재 트랙 */}
+          {/* 현재 트랙 — 하단 플레이어와 동일한 오디오 제어 */}
           <div className="flex items-center gap-3">
-            <button onClick={togglePlay}
+            <button onClick={onToggleBgm}
               className="w-10 h-10 rounded-full bg-violet-500/30 border border-violet-400/50 flex items-center justify-center text-white hover:bg-violet-500/50 transition-colors">
-              {playing ? <Pause size={16} /> : <Play size={16} />}
+              {bgmPlaying ? <Pause size={16} /> : <Play size={16} />}
             </button>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-white truncate">{bgm.name}</p>
               <p className="text-xs text-white/40">우주 배경음악</p>
             </div>
-            <button onClick={() => { audioRef.current?.pause(); setPlaying(false); onChange(null); }}
+            <button onClick={() => onChange(null)}
               className="p-1.5 text-white/30 hover:text-red-400 transition-colors">
               <Trash2 size={14} />
             </button>
           </div>
 
-          {/* 자동재생 */}
+          {/* 자동재생 토글 */}
           <label className="flex items-center gap-2 cursor-pointer">
             <div onClick={() => onChange({ ...bgm, autoPlay: !bgm.autoPlay })}
               className={cn("w-10 h-5 rounded-full transition-colors relative cursor-pointer",
@@ -259,7 +250,7 @@ function BgmTab({
           {/* 교체 */}
           <button onClick={() => fileRef.current?.click()} disabled={uploading}
             className="w-full py-2 rounded-xl border border-dashed border-white/20 text-xs text-white/40 hover:border-violet-400 hover:text-violet-400 transition-colors">
-            다른 음악으로 교체
+            {uploading ? "업로드 중..." : "다른 음악으로 교체"}
           </button>
         </div>
       ) : (
@@ -325,6 +316,8 @@ export function UniverseSettings({
   initialLayout,
   initialAssetPositions,
   allAssets = DEFAULT_ASSETS,
+  bgmPlaying,
+  onToggleBgm,
   onClose,
   onSaved,
 }: {
@@ -335,6 +328,8 @@ export function UniverseSettings({
   initialLayout: Record<string, { top: string; left: string }> | undefined;
   initialAssetPositions?: Record<string, { top: string; left: string }>;
   allAssets?: UniverseAsset[];
+  bgmPlaying: boolean;
+  onToggleBgm: () => void;
   onClose: () => void;
   onSaved: (state: SettingsState) => void;
 }) {
@@ -427,6 +422,8 @@ export function UniverseSettings({
             <BgmTab
               personalId={personalId}
               bgm={state.bgm}
+              bgmPlaying={bgmPlaying}
+              onToggleBgm={onToggleBgm}
               onChange={(bgm) => setState((p) => ({ ...p, bgm }))}
             />
           )}

@@ -315,30 +315,16 @@ function NeighborModal({ onClose, fromId }: { onClose: () => void; fromId?: stri
   );
 }
 
-/* ─── BGM 플레이어 ─────────────────────────────── */
+/* ─── BGM 플레이어 버튼 (오디오는 UniverseHome에서 단일 관리) ── */
 
-function BgmPlayer({ bgm, color }: { bgm: NonNullable<UniverseData["bgm"]>; color: string }) {
-  const [playing, setPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    const audio = new Audio(bgm.url);
-    audio.loop = true;
-    audioRef.current = audio;
-    if (bgm.autoPlay) {
-      audio.play().then(() => setPlaying(true)).catch(() => {});
-    }
-    return () => { audio.pause(); audio.src = ""; };
-  }, [bgm.url, bgm.autoPlay]);
-
-  const toggle = () => {
-    if (!audioRef.current) return;
-    if (playing) { audioRef.current.pause(); setPlaying(false); }
-    else { audioRef.current.play().then(() => setPlaying(true)).catch(() => {}); }
-  };
-
+function BgmPlayerButton({ bgm, color, playing, onToggle }: {
+  bgm: NonNullable<UniverseData["bgm"]>;
+  color: string;
+  playing: boolean;
+  onToggle: () => void;
+}) {
   return (
-    <button onClick={toggle}
+    <button onClick={onToggle}
       className="flex items-center gap-2 px-3 py-2 rounded-full backdrop-blur-sm border text-white/70 text-xs hover:text-white transition-colors"
       style={{ backgroundColor: `${color}15`, borderColor: `${color}40` }}
       title={bgm.name}>
@@ -367,6 +353,43 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   const fromId = searchParams.get("from") ?? undefined;
 
   const { user } = useAuthStore();
+
+  // ── 단일 오디오 인스턴스 (BGM) ──────────────────
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [bgmPlaying, setBgmPlaying] = useState(false);
+
+  useEffect(() => {
+    const bgm = data.bgm;
+    if (!bgm?.url) { audioRef.current?.pause(); audioRef.current = null; setBgmPlaying(false); return; }
+    // URL이 바뀐 경우만 새 Audio 생성
+    if (audioRef.current && audioRef.current.src !== bgm.url) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+      setBgmPlaying(false);
+    }
+    if (!audioRef.current) {
+      const audio = new Audio(bgm.url);
+      audio.loop = true;
+      audioRef.current = audio;
+    }
+    if (bgm.autoPlay) {
+      audioRef.current.play().then(() => setBgmPlaying(true)).catch(() => {});
+    }
+    return () => {
+      // 언마운트 시 정리
+      audioRef.current?.pause();
+    };
+  // data.bgm.url이 바뀔 때만 재실행
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.bgm?.url, data.bgm?.autoPlay]);
+
+  const toggleBgm = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (bgmPlaying) { audio.pause(); setBgmPlaying(false); }
+    else { audio.play().then(() => setBgmPlaying(true)).catch(() => {}); }
+  };
   const isOwner = !!user && !!data.ownerId && user.uid === data.ownerId;
 
   // 다국어
@@ -456,7 +479,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       </div>
 
       {/* 메뉴 노드 — 위치는 menuLayout 우선 */}
-      {data.menus.slice(0, 6).map((menu, i) => {
+      {(data.menus ?? []).slice(0, 6).map((menu, i) => {
         const pos = getMenuPos(menu.id, i);
         return (
           <button key={menu.id} onClick={() => setOpenMenu(menu)}
@@ -475,7 +498,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
 
       {/* 하단 액션 + BGM 플레이어 */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
-        {data.bgm && <BgmPlayer bgm={data.bgm} color={data.color} />}
+        {data.bgm && <BgmPlayerButton bgm={data.bgm} color={data.color} playing={bgmPlaying} onToggle={toggleBgm} />}
         <button className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold text-white backdrop-blur-sm border"
           style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}66` }}
           onClick={() => setShowNeighbors(true)}>
@@ -508,12 +531,14 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       {showSettings && data.personalId && (
         <UniverseSettings
           personalId={data.personalId}
-          menus={data.menus}
+          menus={data.menus ?? []}
           initialAssets={data.selectedAssets ?? []}
           initialBgm={data.bgm}
           initialLayout={data.menuLayout}
           initialAssetPositions={data.assetPositions}
           allAssets={DEFAULT_ASSETS}
+          bgmPlaying={bgmPlaying}
+          onToggleBgm={toggleBgm}
           onClose={() => setShowSettings(false)}
           onSaved={handleSettingsSaved}
         />
