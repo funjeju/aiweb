@@ -304,7 +304,12 @@ function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () =
       if (data.success) {
         alert(`✅ 주소 등록 완료!\n${data.publicUrl}\n\n페이지를 새로고침하면 반영됩니다.`);
       } else {
-        alert(`❌ 등록 실패: ${data.error}`);
+        const detail = [
+          `❌ 등록 실패: ${data.error}`,
+          data.diagnosis ? `\n진단: ${data.diagnosis}` : "",
+          data.registryResponse ? `\n레지스트리 응답: ${data.registryResponse}` : "",
+        ].join("");
+        alert(detail);
       }
     } catch (e) {
       alert(`❌ 오류: ${String(e)}`);
