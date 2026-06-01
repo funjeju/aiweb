@@ -21,10 +21,12 @@ const SKY_GRADIENTS: Record<SkyTheme, [string, string, string]> = {
 export function StarfieldCanvas({
   constellation, showLabels = true,
   skyTheme = "deep-space", lineStyle = "flow", starGlow = "default",
+  shootingStarIntervalMs = 10000,
   onStarClick,
 }: {
   constellation: Constellation;
   showLabels?: boolean;
+  shootingStarIntervalMs?: number;
   onStarClick?: (star: import("@/lib/universe/stars").ConstellationStar) => void;
 } & StyleProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -116,8 +118,9 @@ export function StarfieldCanvas({
       shootingStars.push({ x, y, vx, vy, life: 0, maxLife, len: 0.18 + Math.random() * 0.1 });
     };
 
-    // 10초마다 별똥별 소환
-    const shootTimer = setInterval(spawnShootingStar, 10000);
+    // 설정된 주기마다 별똥별 소환 (어드민 전역 설정, 최소 2초)
+    const intervalMs = Math.max(2000, shootingStarIntervalMs);
+    const shootTimer = setInterval(spawnShootingStar, intervalMs);
     // 첫 로드 후 3초에 선제 발사
     const firstShot = setTimeout(spawnShootingStar, 3000);
 
@@ -300,7 +303,7 @@ export function StarfieldCanvas({
       clearInterval(shootTimer);
       clearTimeout(firstShot);
     };
-  }, [constellation, showLabels, skyTheme, lineStyle, starGlow]);
+  }, [constellation, showLabels, skyTheme, lineStyle, starGlow, shootingStarIntervalMs]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!onStarClick) return;

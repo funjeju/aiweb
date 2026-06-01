@@ -60,7 +60,10 @@ const MENU_CATALOG: { icon: UniverseIconType; label: string; Icon: React.ReactNo
   { icon: "note",    label: "메모",     Icon: <FileText size={14} /> },
 ];
 
-type UniverseMenuForm = { id: string; label: string; icon: UniverseIconType };
+type UniverseMenuForm = { id: string; label: string; icon: UniverseIconType; customIcon?: string };
+
+// 메뉴 아이콘으로 자주 쓰는 이모지 빠른 선택
+const MENU_EMOJI_PRESETS = ["⭐", "🌙", "🪐", "🚀", "💫", "🌷", "📷", "🎵", "✍️", "💌", "🔮", "🌈"];
 
 export default function PrivateEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -250,6 +253,19 @@ export default function PrivateEditPage() {
 
   const removeMenu = (icon: UniverseIconType) => {
     setUniverseMenus((prev) => prev.filter((m) => m.icon !== icon));
+  };
+
+  const setMenuIcon = (icon: UniverseIconType, customIcon: string | undefined) => {
+    setUniverseMenus((prev) => prev.map((m) => {
+      if (m.icon !== icon) return m;
+      if (!customIcon) {
+        // 기본 아이콘으로 — customIcon 키 제거 (Firestore undefined 방지)
+        const { customIcon: _drop, ...rest } = m;
+        void _drop;
+        return rest;
+      }
+      return { ...m, customIcon };
+    }));
   };
 
   const save = async () => {
@@ -491,18 +507,43 @@ export default function PrivateEditPage() {
             {/* 메뉴 모듈 관리 */}
             <div>
               <p className="text-xs font-semibold text-gray-600 mb-2">메뉴 구성 <span className="text-gray-400 font-normal">({universeMenus.length}/6)</span></p>
-              <div className="space-y-1.5 mb-2">
+              <div className="space-y-2 mb-2">
                 {universeMenus.map((m) => (
-                  <div key={m.icon} className="flex items-center justify-between bg-white rounded-xl px-3 py-2 border border-gray-200">
-                    <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                      <span className="text-violet-500">{MENU_CATALOG.find((c) => c.icon === m.icon)?.Icon}</span>
-                      {m.label}
+                  <div key={m.icon} className="bg-white rounded-xl px-3 py-2.5 border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                        {/* 현재 아이콘 미리보기 (동그라미 안) */}
+                        <span className="w-7 h-7 rounded-full bg-violet-50 border border-violet-200 flex items-center justify-center text-violet-500 text-sm">
+                          {m.customIcon ? <span className="text-base leading-none">{m.customIcon}</span> : MENU_CATALOG.find((c) => c.icon === m.icon)?.Icon}
+                        </span>
+                        {m.label}
+                      </div>
+                      {universeMenus.length > 1 && (
+                        <button onClick={() => removeMenu(m.icon)} className="text-gray-300 hover:text-red-400 p-1">
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
-                    {universeMenus.length > 1 && (
-                      <button onClick={() => removeMenu(m.icon)} className="text-gray-300 hover:text-red-400 p-1">
-                        <Trash2 size={13} />
-                      </button>
-                    )}
+                    {/* 아이콘 커스터마이징 */}
+                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                      <span className="text-[10px] text-gray-400 mr-0.5">아이콘</span>
+                      {/* 기본(lucide) */}
+                      <button onClick={() => setMenuIcon(m.icon, undefined)}
+                        className={cn("w-6 h-6 rounded-full flex items-center justify-center border text-[10px] transition-colors",
+                          !m.customIcon ? "border-violet-400 bg-violet-50 text-violet-600" : "border-gray-200 text-gray-400 hover:border-violet-300")}
+                        title="기본 아이콘">기본</button>
+                      {MENU_EMOJI_PRESETS.map((emo) => (
+                        <button key={emo} onClick={() => setMenuIcon(m.icon, emo)}
+                          className={cn("w-6 h-6 rounded-full flex items-center justify-center border text-sm transition-transform hover:scale-110",
+                            m.customIcon === emo ? "border-violet-400 bg-violet-50 ring-1 ring-violet-300" : "border-gray-200")}>
+                          {emo}
+                        </button>
+                      ))}
+                      {/* 직접 입력 */}
+                      <input value={m.customIcon ?? ""} onChange={(e) => setMenuIcon(m.icon, e.target.value.slice(0, 2) || undefined)}
+                        placeholder="✏️" maxLength={2}
+                        className="w-8 h-6 text-center rounded-full border border-gray-200 text-sm focus:border-violet-400 focus:outline-none" />
+                    </div>
                   </div>
                 ))}
               </div>

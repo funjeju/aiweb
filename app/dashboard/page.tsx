@@ -4,7 +4,8 @@ import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSitesByOwner, deleteSite } from "@/lib/firebase/sites";
-import { getPersonalsByOwner, deletePersonal, getAllPersonals } from "@/lib/firebase/personals";
+import { getPersonalsByOwner, deletePersonal, getAllPersonals, updatePersonal } from "@/lib/firebase/personals";
+import { getUniverseConfig, setUniverseConfig } from "@/lib/firebase/config";
 import { useAuthStore } from "@/lib/store/authStore";
 import { canManageSites } from "@/lib/firebase/users";
 import { logout } from "@/lib/firebase/auth";
@@ -14,7 +15,7 @@ import { getAppUrl } from "@/lib/utils";
 // slug 재등록은 서버사이드 API route로 처리 (CORS 우회)
 import {
   Plus, Globe, Pencil, ExternalLink, Sparkles, LogOut, User,
-  MoreVertical, Trash2, Layers, Star, Building2, RefreshCw, Shield,
+  MoreVertical, Trash2, Layers, Star, Building2, RefreshCw, Shield, Lock, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -226,11 +227,14 @@ function DashboardContent() {
         {/* ── 어드민: 전체 관리 탭 ── */}
         {tab === "admin" && isAdmin && (
           <div className="space-y-3">
+            {/* 전역 우주 설정 */}
+            <AdminUniverseConfig />
+
             {allPages.length === 0 ? (
               <p className="text-center text-gray-400 py-12 text-sm">등록된 페이지가 없어요.</p>
             ) : (
               <>
-                <p className="text-xs text-gray-400 mb-2">전체 {allPages.length}개 · 모든 사용자의 개인 페이지</p>
+                <p className="text-xs text-gray-400 mb-2 mt-4">전체 {allPages.length}개 · 모든 사용자의 개인 페이지</p>
                 {allPages
                   .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))
                   .map((p) => (
@@ -316,11 +320,70 @@ function SiteCard({ site, onDelete }: { site: SiteSchema; onDelete: () => void }
   );
 }
 
+/* ── 어드민: 전역 우주 설정 (별똥별 주기 등) ── */
+function AdminUniverseConfig() {
+  const [interval, setIntervalSec] = useState<number>(10);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    getUniverseConfig().then((c) => { setIntervalSec(c.shootingStarIntervalSec); setLoading(false); });
+  }, []);
+
+  const save = async () => {
+    setSaving(true); setSaved(false);
+    try {
+      await setUniverseConfig({ shootingStarIntervalSec: Math.max(2, Math.min(600, interval)) });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch { alert("저장에 실패했습니다."); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Sparkles size={15} className="text-violet-500" />
+        <p className="font-semibold text-gray-800 text-sm">전역 우주 설정</p>
+      </div>
+      <div className="flex items-center gap-3">
+        <label className="text-sm text-gray-600 shrink-0">별똥별 주기</label>
+        <input type="number" min={2} max={600} value={loading ? "" : interval}
+          onChange={(e) => setIntervalSec(Number(e.target.value) || 10)}
+          disabled={loading}
+          className="w-20 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-800 focus:border-violet-400 focus:outline-none" />
+        <span className="text-sm text-gray-400">초마다</span>
+        <button onClick={save} disabled={saving || loading}
+          className={cn("ml-auto flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors",
+            saved ? "bg-green-500 text-white" : "bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50")}>
+          {saving ? <RefreshCw size={14} className="animate-spin" /> : saved ? <Check size={14} /> : null}
+          {saved ? "저장됨" : "저장"}
+        </button>
+      </div>
+      <p className="text-[11px] text-gray-400 mt-2">모든 별자리 우주에 적용됩니다 (2~600초). 방문자가 페이지를 다시 열면 반영돼요.</p>
+    </div>
+  );
+}
+
 /* ── 개인 페이지 카드 ── */
 function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [fixing, setFixing] = useState(false);
+  const [published, setPublished] = useState(page.published !== false);
+  const [toggling, setToggling] = useState(false);
+
+  const toggleVisibility = async () => {
+    setMenuOpen(false);
+    setToggling(true);
+    const next = !published;
+    try {
+      await updatePersonal(page.id, { published: next });
+      setPublished(next);
+    } catch { alert("공개 설정 변경에 실패했습니다."); }
+    finally { setToggling(false); }
+  };
 
   const handleDelete = async () => {
     setMenuOpen(false);
@@ -371,9 +434,9 @@ function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () =
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <p className="font-semibold text-gray-900 truncate">{page.profile.name || "이름 없음"}</p>
-            {page.published
+            {published
               ? <span className="shrink-0 flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full"><Globe size={10} />공개</span>
-              : <span className="shrink-0 text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비공개</span>
+              : <span className="shrink-0 flex items-center gap-1 text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비공개</span>
             }
           </div>
           <p className="text-xs text-gray-400 truncate">
@@ -390,9 +453,9 @@ function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () =
           <Pencil size={14} />편집
         </Link>
         <div className="relative">
-          <button onClick={() => setMenuOpen((v) => !v)} disabled={deleting || fixing}
+          <button onClick={() => setMenuOpen((v) => !v)} disabled={deleting || fixing || toggling}
             className="p-2 hover:bg-gray-100 rounded-lg">
-            {fixing
+            {fixing || toggling
               ? <RefreshCw size={15} className="text-violet-500 animate-spin" />
               : <MoreVertical size={15} className="text-gray-500" />}
           </button>
@@ -400,6 +463,11 @@ function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () =
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
               <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-20">
+                <button onClick={toggleVisibility}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                  {published ? <Lock size={14} /> : <Globe size={14} />}
+                  {published ? "비공개로 전환" : "공개로 전환"}
+                </button>
                 <button onClick={handleFixSlug}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-violet-600 hover:bg-violet-50">
                   <RefreshCw size={14} />{page.publicUrl ? "주소 재등록" : "주소 발급"}

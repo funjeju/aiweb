@@ -10,7 +10,7 @@ import { UniverseSettings } from "./UniverseSettings";
 import { generateConstellation, generateConstellationFromSeed } from "@/lib/universe/stars";
 import { getStarLore } from "@/lib/universe/star-lore";
 import type { ConstellationStar } from "@/lib/universe/stars";
-import { getPublishedUniverses, updatePersonal } from "@/lib/firebase/personals";
+import { getPublishedUniverses, updatePersonal, getPersonalById } from "@/lib/firebase/personals";
 import { uploadPersonalImage } from "@/lib/firebase/storage";
 import { useAuthStore } from "@/lib/store/authStore";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
@@ -23,13 +23,14 @@ import {
   Link2, Music, FileText, ArrowRight, Loader2,
   Github, Instagram, Linkedin, Globe, Mail,
   ChevronLeft, ChevronRight, Pencil, Plus, Check, Settings,
-  Play, Pause, LogIn,
+  Play, Pause, LogIn, Send, Lock, MessageCircle, PenLine, Trash2,
 } from "lucide-react";
+import type { DiaryEntry, DiaryEmotion } from "@/lib/types/personal";
 import { cn } from "@/lib/utils";
 
 /* ─── 타입 ────────────────────────────────────── */
 
-export interface UniverseMenu { id: string; label: string; icon: UniverseIconType; }
+export interface UniverseMenu { id: string; label: string; icon: UniverseIconType; customIcon?: string; }
 
 export interface BgmTrack { url: string; name: string; autoPlay?: boolean; }
 
@@ -46,6 +47,9 @@ export interface UniverseData {
   role?: string;
   socials?: { github?: string; instagram?: string; linkedin?: string; twitter?: string; website?: string; email?: string; };
   galleryItems?: GalleryItem[];
+  diaryEntries?: DiaryEntry[];
+  published?: boolean;
+  shootingStarIntervalSec?: number;
   selectedAssets?: string[];
   bgmList?: BgmTrack[];
   menuLayout?: Record<string, { top: string; left: string }>;
@@ -264,6 +268,14 @@ function GalleryPanel({ data, isOwner, onSaved }: {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sitePublic = data.published !== false; // 사이트 비공개면 항목 공개 불가
+
+  // 비소유자: 사이트 공개 + 항목 공개인 것만 노출 (isPublic 미지정 구버전은 공개 취급)
+  const visibleItems = isOwner
+    ? items
+    : sitePublic
+      ? items.filter((it) => it.isPublic !== false)
+      : [];
 
   const saveToDb = async (updated: GalleryItem[]) => {
     if (!data.personalId) return;
@@ -283,7 +295,8 @@ function GalleryPanel({ data, isOwner, onSaved }: {
       const newItems: GalleryItem[] = [];
       for (const file of files) {
         const url = await uploadPersonalImage(data.personalId, "gallery", file);
-        newItems.push({ url });
+        // 사이트 공개 상태면 기본 공개, 비공개면 비공개
+        newItems.push({ url, isPublic: sitePublic });
       }
       const updated = [...items, ...newItems];
       setItems(updated);
@@ -292,22 +305,28 @@ function GalleryPanel({ data, isOwner, onSaved }: {
     finally { setUploading(false); e.target.value = ""; }
   };
 
-  const deleteItem = async (idx: number) => {
-    const updated = items.filter((_, i) => i !== idx);
+  const deleteByUrl = async (url: string) => {
+    const updated = items.filter((it) => it.url !== url);
     setItems(updated);
     await saveToDb(updated);
   };
 
-  const prevImg = () => setLightboxIdx((i) => (i !== null ? (i - 1 + items.length) % items.length : null));
-  const nextImg = () => setLightboxIdx((i) => (i !== null ? (i + 1) % items.length : null));
+  const toggleByUrl = async (url: string) => {
+    if (!sitePublic) return;
+    const updated = items.map((it) => it.url === url ? { ...it, isPublic: !(it.isPublic !== false) } : it);
+    setItems(updated);
+    await saveToDb(updated);
+  };
 
-  if (items.length === 0 && !isOwner) {
-    return <div className="flex flex-col items-center py-8 text-white/30 text-sm gap-2"><ImageIcon size={28} />아직 사진이 없어요.</div>;
+  const prevImg = () => setLightboxIdx((i) => (i !== null ? (i - 1 + visibleItems.length) % visibleItems.length : null));
+  const nextImg = () => setLightboxIdx((i) => (i !== null ? (i + 1) % visibleItems.length : null));
+
+  if (visibleItems.length === 0 && !isOwner) {
+    return <div className="flex flex-col items-center py-8 text-white/30 text-sm gap-2"><ImageIcon size={28} />아직 공개된 사진이 없어요.</div>;
   }
 
   return (
     <>
-      {/* 빈 상태: 버튼 하나만 */}
       {items.length === 0 && isOwner ? (
         <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
           className="w-full py-10 border-2 border-dashed border-white/15 rounded-2xl flex flex-col items-center gap-2 text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
@@ -316,20 +335,32 @@ function GalleryPanel({ data, isOwner, onSaved }: {
         </button>
       ) : (
         <div className="grid grid-cols-3 gap-1.5">
-          {items.map((item, i) => (
-            <div key={item.url} className="relative aspect-square rounded-xl overflow-hidden group">
-              <button onClick={() => setLightboxIdx(i)} className="w-full h-full">
-                <Image src={item.url} alt="" width={120} height={120} className="w-full h-full object-cover" />
-              </button>
-              {isOwner && (
-                <button onClick={() => deleteItem(i)}
-                  className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80">
-                  <X size={10} className="text-white" />
+          {visibleItems.map((item, i) => {
+            const pub = item.isPublic !== false;
+            return (
+              <div key={item.url} className="relative aspect-square rounded-xl overflow-hidden group">
+                <button onClick={() => setLightboxIdx(i)} className="w-full h-full">
+                  <Image src={item.url} alt="" width={120} height={120} className="w-full h-full object-cover" />
                 </button>
-              )}
-            </div>
-          ))}
-          {/* 이미지가 있을 때 추가 버튼 */}
+                {isOwner && (
+                  <>
+                    {/* 공개/비공개 토글 (좌상단) */}
+                    <button onClick={() => toggleByUrl(item.url)} disabled={!sitePublic}
+                      title={sitePublic ? (pub ? "공개됨 — 클릭해 비공개" : "비공개 — 클릭해 공개") : "사이트가 비공개입니다"}
+                      className={cn("absolute top-1 left-1 w-6 h-6 rounded-full flex items-center justify-center transition-colors",
+                        pub && sitePublic ? "bg-green-500/70" : "bg-black/60")}>
+                      {pub && sitePublic ? <Globe size={10} className="text-white" /> : <Lock size={10} className="text-white" />}
+                    </button>
+                    {/* 삭제 (우상단) */}
+                    <button onClick={() => deleteByUrl(item.url)}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80">
+                      <X size={10} className="text-white" />
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })}
           {isOwner && (
             <button onClick={() => fileInputRef.current?.click()} disabled={uploading || saving}
               className="aspect-square rounded-xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
@@ -341,21 +372,282 @@ function GalleryPanel({ data, isOwner, onSaved }: {
         </div>
       )}
 
+      {isOwner && !sitePublic && items.length > 0 && (
+        <p className="text-[10px] text-white/30 mt-2 flex items-center gap-1"><Lock size={9} />사이트가 비공개라 모든 사진은 나만 볼 수 있어요.</p>
+      )}
+
       <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
 
       {/* 라이트박스 */}
-      {lightboxIdx !== null && (
+      {lightboxIdx !== null && visibleItems[lightboxIdx] && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/92" onClick={() => setLightboxIdx(null)}>
           <button onClick={(e) => { e.stopPropagation(); prevImg(); }} className="absolute left-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"><ChevronLeft size={24} /></button>
           <div className="relative max-w-[90vw] max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-            <Image src={items[lightboxIdx].url} alt="" width={1200} height={900} className="max-w-[90vw] max-h-[80vh] object-contain rounded-2xl" />
-            <p className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-white/30 text-xs">{lightboxIdx + 1} / {items.length}</p>
+            <Image src={visibleItems[lightboxIdx].url} alt="" width={1200} height={900} className="max-w-[90vw] max-h-[80vh] object-contain rounded-2xl" />
+            <p className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-white/30 text-xs">{lightboxIdx + 1} / {visibleItems.length}</p>
           </div>
           <button onClick={(e) => { e.stopPropagation(); nextImg(); }} className="absolute right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"><ChevronRight size={24} /></button>
           <button onClick={() => setLightboxIdx(null)} className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"><X size={20} /></button>
         </div>
       )}
     </>
+  );
+}
+
+/* ─── AI 다이어리 패널 ─────────────────────────── */
+
+const EMOTION_META: Record<DiaryEmotion, { emoji: string; label: string }> = {
+  happy:    { emoji: "😊", label: "행복" },
+  calm:     { emoji: "😌", label: "평온" },
+  sad:      { emoji: "😢", label: "슬픔" },
+  excited:  { emoji: "✨", label: "설렘" },
+  tired:    { emoji: "😮‍💨", label: "지침" },
+  grateful: { emoji: "🙏", label: "감사" },
+  anxious:  { emoji: "😰", label: "불안" },
+  neutral:  { emoji: "🌙", label: "평범" },
+};
+
+type DiaryView = "list" | "write";
+type WriteMode = "text" | "chat";
+interface ChatMsg { role: "ai" | "user"; text: string }
+
+function DiaryPanel({ data, isOwner, onSaved }: {
+  data: UniverseData;
+  isOwner: boolean;
+  onSaved: (entries: DiaryEntry[]) => void;
+}) {
+  const [entries, setEntries] = useState<DiaryEntry[]>(data.diaryEntries ?? []);
+  const [view, setView] = useState<DiaryView>("list");
+  const [mode, setMode] = useState<WriteMode>("text");
+  const sitePublic = data.published !== false; // 사이트 비공개면 항목 공개 불가
+
+  // 사이트가 공개일 때만 비소유자에게 공개 항목 노출
+  const visibleEntries = isOwner
+    ? entries
+    : sitePublic
+      ? entries.filter((e) => e.isPublic)
+      : [];
+
+  const saveToDb = async (updated: DiaryEntry[]) => {
+    setEntries(updated);
+    if (data.personalId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await updatePersonal(data.personalId, { "universe.diaryEntries": updated } as any);
+    }
+    onSaved(updated);
+  };
+
+  const deleteEntry = async (id: string) => {
+    if (!confirm("이 일기를 삭제할까요?")) return;
+    await saveToDb(entries.filter((e) => e.id !== id));
+  };
+
+  if (view === "write" && isOwner) {
+    return (
+      <DiaryWriter
+        mode={mode}
+        setMode={setMode}
+        sitePublic={sitePublic}
+        onCancel={() => setView("list")}
+        onSave={async (entry) => {
+          await saveToDb([entry, ...entries]);
+          setView("list");
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* 작성 버튼 (소유자) */}
+      {isOwner && (
+        <button onClick={() => { setMode("text"); setView("write"); }}
+          className="w-full py-3 rounded-xl bg-violet-500 text-white text-sm font-bold hover:bg-violet-600 flex items-center justify-center gap-2 transition-colors">
+          <PenLine size={15} />오늘 일기 쓰기
+        </button>
+      )}
+
+      {visibleEntries.length === 0 ? (
+        <div className="flex flex-col items-center py-8 text-white/30 text-sm gap-2">
+          <BookOpen size={28} />
+          {isOwner ? "첫 일기를 남겨보세요." : "아직 공개된 일기가 없어요."}
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {visibleEntries.map((e) => {
+            const em = EMOTION_META[e.emotion ?? "neutral"];
+            return (
+              <div key={e.id} className="rounded-2xl bg-white/5 border border-white/10 p-3.5">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-base">{em.emoji}</span>
+                  <span className="text-xs text-white/40">{e.date}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50">{em.label}</span>
+                  {e.mode === "chat" && <MessageCircle size={11} className="text-white/30" />}
+                  {isOwner && (
+                    <span className="ml-auto flex items-center gap-1.5">
+                      {e.isPublic
+                        ? <Globe size={11} className="text-green-400/70" />
+                        : <Lock size={11} className="text-white/30" />}
+                      <button onClick={() => deleteEntry(e.id)} className="text-white/20 hover:text-red-400 transition-colors">
+                        <Trash2 size={12} />
+                      </button>
+                    </span>
+                  )}
+                </div>
+                <p className="text-white/75 text-sm leading-relaxed whitespace-pre-wrap">{e.content}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── 다이어리 작성기 (일기형 / 대화형) ───────── */
+
+function DiaryWriter({ mode, setMode, sitePublic, onCancel, onSave }: {
+  mode: WriteMode;
+  setMode: (m: WriteMode) => void;
+  sitePublic: boolean;
+  onCancel: () => void;
+  onSave: (entry: DiaryEntry) => Promise<void>;
+}) {
+  const [text, setText] = useState("");
+  const [messages, setMessages] = useState<ChatMsg[]>([
+    { role: "ai", text: "오늘 하루는 어땠어요? 편하게 들려주세요 🌙" },
+  ]);
+  const [chatInput, setChatInput] = useState("");
+  const [aiThinking, setAiThinking] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, aiThinking]);
+
+  const sendChat = async () => {
+    const t = chatInput.trim();
+    if (!t || aiThinking) return;
+    const next = [...messages, { role: "user" as const, text: t }];
+    setMessages(next);
+    setChatInput("");
+    setAiThinking(true);
+    try {
+      const res = await fetch("/api/personal/diary", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "chat", messages: next }),
+      });
+      const data = await res.json();
+      if (data.reply) setMessages((p) => [...p, { role: "ai", text: data.reply }]);
+    } catch { /* 무시 */ }
+    finally { setAiThinking(false); }
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/personal/diary", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          mode === "chat"
+            ? { action: "finalize", mode, messages }
+            : { action: "finalize", mode, text }
+        ),
+      });
+      const data = await res.json();
+      if (data.error) { alert("일기 정리에 실패했습니다."); return; }
+      const entry: DiaryEntry = {
+        id: `d_${Date.now()}`,
+        date: new Date().toISOString().slice(0, 10),
+        mode,
+        content: data.content,
+        emotion: data.emotion,
+        isPublic: sitePublic ? isPublic : false,
+        createdAt: new Date().toISOString(),
+      };
+      await onSave(entry);
+    } finally { setSaving(false); }
+  };
+
+  const canSave = mode === "text" ? text.trim().length > 0 : messages.some((m) => m.role === "user");
+
+  return (
+    <div className="flex flex-col h-full min-h-[360px]">
+      {/* 모드 토글 */}
+      <div className="flex gap-1 p-1 bg-white/5 rounded-xl mb-3 shrink-0">
+        {([["text", "일기형", <PenLine key="p" size={13} />], ["chat", "대화형", <MessageCircle key="c" size={13} />]] as const).map(([m, label, icon]) => (
+          <button key={m} onClick={() => setMode(m)}
+            className={cn("flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors",
+              mode === m ? "bg-violet-500 text-white" : "text-white/40 hover:text-white/70")}>
+            {icon}{label}
+          </button>
+        ))}
+      </div>
+
+      {/* 본문 */}
+      {mode === "text" ? (
+        <textarea value={text} onChange={(e) => setText(e.target.value)} autoFocus
+          rows={8} placeholder="오늘 있었던 일, 느낀 감정을 자유롭게 적어보세요. AI가 감성적인 일기로 다듬어드려요."
+          className="flex-1 w-full px-3.5 py-3 rounded-xl bg-white/8 border border-white/15 text-sm text-white placeholder-white/25 focus:border-violet-400 focus:outline-none resize-none" />
+      ) : (
+        <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-2.5 pr-1 min-h-[200px] max-h-[300px]">
+          {messages.map((m, i) => (
+            <div key={i} className={cn("flex", m.role === "ai" ? "justify-start" : "justify-end")}>
+              <div className={cn("max-w-[80%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed",
+                m.role === "ai" ? "bg-white/10 text-white/80 rounded-tl-sm" : "bg-violet-500 text-white rounded-tr-sm")}>
+                {m.text}
+              </div>
+            </div>
+          ))}
+          {aiThinking && (
+            <div className="flex justify-start">
+              <div className="px-3.5 py-2.5 rounded-2xl rounded-tl-sm bg-white/10">
+                <Loader2 size={14} className="animate-spin text-white/50" />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 대화형 입력창 */}
+      {mode === "chat" && (
+        <div className="flex items-center gap-2 mt-2 shrink-0">
+          <input value={chatInput} onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendChat()}
+            placeholder="답장을 입력하세요..."
+            className="flex-1 px-3.5 py-2.5 rounded-full bg-white/8 border border-white/15 text-sm text-white placeholder-white/25 focus:border-violet-400 focus:outline-none" />
+          <button onClick={sendChat} disabled={aiThinking || !chatInput.trim()}
+            className="w-10 h-10 rounded-full bg-violet-500 text-white flex items-center justify-center hover:bg-violet-600 disabled:opacity-40 shrink-0">
+            <Send size={15} />
+          </button>
+        </div>
+      )}
+
+      {/* 공개/비공개 + 저장 */}
+      <div className="mt-3 pt-3 border-t border-white/10 shrink-0 space-y-2.5">
+        <label className={cn("flex items-center gap-2", sitePublic ? "cursor-pointer" : "opacity-40 cursor-not-allowed")}>
+          <div onClick={() => sitePublic && setIsPublic((v) => !v)}
+            className={cn("w-9 h-5 rounded-full transition-colors relative", isPublic && sitePublic ? "bg-violet-500" : "bg-white/20")}>
+            <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform", isPublic && sitePublic ? "translate-x-4" : "translate-x-0.5")} />
+          </div>
+          <span className="text-xs text-white/60 flex items-center gap-1">
+            {isPublic && sitePublic ? <Globe size={11} /> : <Lock size={11} />}
+            {sitePublic ? (isPublic ? "방문자에게 공개" : "나만 보기") : "사이트가 비공개라 공개 불가"}
+          </span>
+        </label>
+        <div className="flex gap-2">
+          <button onClick={save} disabled={!canSave || saving}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-violet-500 text-white text-sm font-bold hover:bg-violet-600 disabled:opacity-40">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            {saving ? "AI가 일기로 정리 중..." : "저장"}
+          </button>
+          <button onClick={onCancel} disabled={saving}
+            className="px-4 py-2.5 rounded-xl bg-white/10 text-white/60 text-sm hover:bg-white/15">취소</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -376,7 +668,10 @@ function MenuContent({ menu, data, isOwner, onDataUpdate }: {
       <GalleryPanel data={data} isOwner={isOwner}
         onSaved={(items) => onDataUpdate({ galleryItems: items })} />
     );
-    case "diary":   return <p className="text-white/50 text-sm py-4 text-center">AI 다이어리는 곧 연동됩니다.</p>;
+    case "diary": return (
+      <DiaryPanel data={data} isOwner={isOwner}
+        onSaved={(entries) => onDataUpdate({ diaryEntries: entries })} />
+    );
     case "link":    return <p className="text-white/50 text-sm py-4 text-center">링크 모음은 곧 추가됩니다.</p>;
     case "music":   return <p className="text-white/50 text-sm py-4 text-center">음악 공간은 곧 추가됩니다.</p>;
     case "note":    return <p className="text-white/50 text-sm py-4 text-center">메모 공간은 곧 추가됩니다.</p>;
@@ -526,12 +821,18 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   const [showNeighbors, setShowNeighbors] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [showPrivateNotice, setShowPrivateNotice] = useState(false);
   const [clickedStar, setClickedStar] = useState<ConstellationStar | null>(null);
 
   // 로그인 없이 열람 가능한 메뉴
   const PUBLIC_MENUS: UniverseIconType[] = ["profile", "gallery"];
 
   const handleMenuClick = (menu: UniverseMenu) => {
+    // 사이트가 비공개인데 소유자가 아니면 진입 차단
+    if (data.published === false && !isOwner) {
+      setShowPrivateNotice(true);
+      return;
+    }
     if (!user && !PUBLIC_MENUS.includes(menu.icon)) {
       setShowLoginPrompt(true);
       return;
@@ -616,13 +917,36 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwner, data.personalId]);
 
+  // [보안] SSR은 공개 콘텐츠만 전송 → 소유자 확인되면 비공개 콘텐츠를 클라이언트에서 추가 로드
+  const [privateLoaded, setPrivateLoaded] = useState(false);
+  useEffect(() => {
+    if (!isOwner || !data.personalId || privateLoaded) return;
+    let cancelled = false;
+    getPersonalById(data.personalId).then((full) => {
+      if (cancelled || !full) return;
+      setData((prev) => ({
+        ...prev,
+        about:        full.about || full.profile.bio || prev.about,
+        photo:        full.profile.photo ?? prev.photo,
+        tagline:      full.profile.tagline ?? prev.tagline,
+        role:         full.profile.role ?? prev.role,
+        socials:      full.profile.socials ?? prev.socials,
+        galleryItems: full.universe?.galleryItems ?? prev.galleryItems,
+        diaryEntries: full.universe?.diaryEntries ?? prev.diaryEntries,
+      }));
+      setPrivateLoaded(true);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, data.personalId, privateLoaded]);
+
   // 다국어
   const { lang, setLang } = useLang();
   const [langLoading, setLangLoading] = useState(false);
   const [transCache, setTransCache] = useState<Record<string, { about: string; tagline: string; role: string }>>({});
 
-  // 현재 표시할 번역된 콘텐츠
-  const displayed = transCache[lang] ?? { about: initialData.about ?? "", tagline: initialData.tagline ?? "", role: initialData.role ?? "" };
+  // 현재 표시할 번역된 콘텐츠 (라이브 data 기준 — 소유자 비공개 재로딩 반영)
+  const displayed = transCache[lang] ?? { about: data.about ?? "", tagline: data.tagline ?? "", role: data.role ?? "" };
 
   const switchLang = async (target: typeof lang) => {
     if (target === lang || langLoading) return;
@@ -630,7 +954,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
     if (target === "ko" || transCache[target]) return;
     setLangLoading(true);
     try {
-      const texts = collectUniverseTexts(initialData.about ?? "", initialData.tagline ?? "", initialData.role ?? "");
+      const texts = collectUniverseTexts(data.about ?? "", data.tagline ?? "", data.role ?? "");
       const translations = await fetchTranslations(texts, target);
       const applied = applyUniverseTexts(translations);
       setTransCache((c) => ({ ...c, [target]: applied }));
@@ -686,6 +1010,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         skyTheme={style.skyTheme ?? "deep-space"}
         lineStyle={style.lineStyle ?? "flow"}
         starGlow={style.starGlow ?? "default"}
+        shootingStarIntervalMs={(data.shootingStarIntervalSec ?? 10) * 1000}
         onStarClick={(star) => {
           if (!openMenu && !showNeighbors && !showSettings) setClickedStar(star);
         }}
@@ -751,7 +1076,9 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
             <span className="flex flex-col items-center gap-2">
               <span className="w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-sm border transition-transform group-hover:scale-110 relative"
                 style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}88`, color: "#fff", boxShadow: `0 0 20px ${data.color}55` }}>
-                {ICON[menu.icon]}
+                {menu.customIcon
+                  ? <span className="text-xl leading-none">{menu.customIcon}</span>
+                  : ICON[menu.icon]}
                 {/* 비로그인 + 제한 메뉴에 자물쇠 뱃지 */}
                 {!user && !isPublic && (
                   <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[8px]">🔒</span>
@@ -789,7 +1116,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           <div className="w-full sm:max-w-md bg-[#0b1026] border border-white/10 rounded-t-3xl sm:rounded-3xl p-6 m-0 sm:m-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 shrink-0">
               <div className="flex items-center gap-2 text-white">
-                <span style={{ color: data.color }}>{ICON[openMenu.icon]}</span>
+                <span style={{ color: data.color }}>{openMenu.customIcon ? <span className="text-lg">{openMenu.customIcon}</span> : ICON[openMenu.icon]}</span>
                 <h2 className="font-bold text-lg">{openMenu.label}</h2>
               </div>
               <button onClick={() => setOpenMenu(null)} className="text-white/50 hover:text-white"><X size={20} /></button>
@@ -811,6 +1138,26 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
 
       {/* 로그인 유도 모달 */}
       {showLoginPrompt && <LoginPrompt onClose={() => setShowLoginPrompt(false)} />}
+
+      {/* 비공개 우주 안내 */}
+      {showPrivateNotice && (
+        <div className="absolute inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowPrivateNotice(false)}>
+          <div className="w-full sm:max-w-sm bg-[#0b1026] border border-white/10 rounded-t-3xl sm:rounded-3xl p-7 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-14 h-14 rounded-full bg-white/10 border border-white/15 flex items-center justify-center mx-auto mb-4">
+              <Lock size={22} className="text-white/60" />
+            </div>
+            <h2 className="text-white font-bold text-lg mb-2">비공개 우주예요</h2>
+            <p className="text-white/50 text-sm leading-relaxed mb-6">
+              이 별자리의 주인이 우주를 비공개로 설정했어요.<br />
+              별자리는 볼 수 있지만 내용은 열람할 수 없어요.
+            </p>
+            <button onClick={() => setShowPrivateNotice(false)}
+              className="w-full py-3 rounded-2xl bg-white/10 text-white/80 font-semibold hover:bg-white/15 transition-colors">
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 별 클릭 설명 모달 */}
       {clickedStar && (() => {

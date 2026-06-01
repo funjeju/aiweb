@@ -28,6 +28,22 @@ export type UniverseIconType = "profile" | "diary" | "gallery" | "link" | "music
 export interface GalleryItem {
   url: string;
   caption?: string; // AI 생성 감성 캡션
+  isPublic?: boolean; // 항목별 공개 여부 (기본 true). 사이트 비공개면 무시
+}
+
+/** AI 다이어리 감정 태그 */
+export type DiaryEmotion =
+  | "happy" | "calm" | "sad" | "excited"
+  | "tired" | "grateful" | "anxious" | "neutral";
+
+export interface DiaryEntry {
+  id: string;
+  date: string;            // YYYY-MM-DD
+  mode: "text" | "chat";   // 일기형 / 대화형
+  content: string;         // 최종 일기 본문 (대화형이면 AI 요약)
+  emotion?: DiaryEmotion;  // AI 분류 감정
+  isPublic: boolean;       // 항목별 공개 여부
+  createdAt: string;       // ISO
 }
 
 export type SkyTheme = "deep-space" | "purple-galaxy" | "jeju" | "vintage";
@@ -81,10 +97,11 @@ export interface PersonalSchema {
   universe?: {
     color: string;
     favoriteNumber: number;
-    menus: Array<{ id: string; label: string; icon: UniverseIconType }>;
+    menus: Array<{ id: string; label: string; icon: UniverseIconType; customIcon?: string }>;
     style?: UniverseStyle;
     galleryImages?: string[];
     galleryItems?: GalleryItem[];
+    diaryEntries?: DiaryEntry[];
     selectedAssets?: string[];
     /** 별자리 시드 — 최초 생성 시 한 번 저장, 이후 고정 */
     constellationSeed?: number;
