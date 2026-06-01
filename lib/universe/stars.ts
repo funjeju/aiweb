@@ -1,55 +1,57 @@
 /**
- * 실제 밝은 항성 데이터 (HYG / Yale Bright Star Catalog 기반 발췌).
- * 육안으로 잘 보이는 1~2등성 위주 — 별자리를 "실제 별들의 조합"으로 만들기 위한 풀.
- * mag(겉보기 등급): 작을수록 밝음.
+ * 실제 밝은 항성 데이터 (HYG / Yale Bright Star Catalog 기반).
+ * ra: 적경(deg, 0~360), dec: 적위(deg, -90~90), mag: 겉보기 등급(작을수록 밝음).
+ * 별자리를 "실제 별들의 실제 상대 위치"로 그리기 위해 실제 천구 좌표를 포함한다.
  */
 export interface RealStar {
   name: string;
-  mag: number; // 겉보기 등급
+  ra: number;
+  dec: number;
+  mag: number;
 }
 
-// 전 하늘에서 가장 밝은 별들 (실제 항성명 + 등급). 별자리 구성용 풀.
 export const BRIGHT_STARS: RealStar[] = [
-  { name: "시리우스 (Sirius)", mag: -1.46 },
-  { name: "카노푸스 (Canopus)", mag: -0.74 },
-  { name: "리길 켄타우루스 (Rigil Kentaurus)", mag: -0.27 },
-  { name: "아르크투루스 (Arcturus)", mag: -0.05 },
-  { name: "베가 (Vega)", mag: 0.03 },
-  { name: "카펠라 (Capella)", mag: 0.08 },
-  { name: "리겔 (Rigel)", mag: 0.13 },
-  { name: "프로키온 (Procyon)", mag: 0.34 },
-  { name: "베텔게우스 (Betelgeuse)", mag: 0.42 },
-  { name: "아케르나르 (Achernar)", mag: 0.46 },
-  { name: "하다르 (Hadar)", mag: 0.61 },
-  { name: "알타이르 (Altair)", mag: 0.77 },
-  { name: "알데바란 (Aldebaran)", mag: 0.85 },
-  { name: "안타레스 (Antares)", mag: 0.96 },
-  { name: "스피카 (Spica)", mag: 1.04 },
-  { name: "폴룩스 (Pollux)", mag: 1.14 },
-  { name: "포말하우트 (Fomalhaut)", mag: 1.16 },
-  { name: "데네브 (Deneb)", mag: 1.25 },
-  { name: "레굴루스 (Regulus)", mag: 1.35 },
-  { name: "카스토르 (Castor)", mag: 1.57 },
-  { name: "감마 크루키스 (Gacrux)", mag: 1.63 },
-  { name: "벨라트릭스 (Bellatrix)", mag: 1.64 },
-  { name: "엘나스 (Elnath)", mag: 1.65 },
-  { name: "알니람 (Alnilam)", mag: 1.69 },
-  { name: "알니타크 (Alnitak)", mag: 1.77 },
-  { name: "두브헤 (Dubhe)", mag: 1.79 },
-  { name: "미르파크 (Mirfak)", mag: 1.79 },
-  { name: "벨라 (Wezen)", mag: 1.83 },
-  { name: "사르가스 (Sargas)", mag: 1.86 },
-  { name: "카우스 아우스트랄리스 (Kaus Australis)", mag: 1.85 },
-  { name: "아벨리오 (Avior)", mag: 1.86 },
-  { name: "알카이드 (Alkaid)", mag: 1.86 },
-  { name: "메사르팀 (Menkalinan)", mag: 1.9 },
-  { name: "아틀라스 (Atria)", mag: 1.91 },
-  { name: "알헤나 (Alhena)", mag: 1.93 },
-  { name: "페크다 (Phecda)", mag: 2.44 },
-  { name: "미자르 (Mizar)", mag: 2.23 },
-  { name: "메라크 (Merak)", mag: 2.37 },
-  { name: "알리오트 (Alioth)", mag: 1.76 },
-  { name: "폴라리스 (Polaris)", mag: 1.98 },
+  { name: "시리우스", ra: 101.3, dec: -16.7, mag: -1.46 },
+  { name: "카노푸스", ra: 95.9, dec: -52.7, mag: -0.74 },
+  { name: "리길 켄타우루스", ra: 219.9, dec: -60.8, mag: -0.27 },
+  { name: "아르크투루스", ra: 213.9, dec: 19.2, mag: -0.05 },
+  { name: "베가", ra: 279.2, dec: 38.8, mag: 0.03 },
+  { name: "카펠라", ra: 79.2, dec: 46.0, mag: 0.08 },
+  { name: "리겔", ra: 78.6, dec: -8.2, mag: 0.13 },
+  { name: "프로키온", ra: 114.8, dec: 5.2, mag: 0.34 },
+  { name: "베텔게우스", ra: 88.8, dec: 7.4, mag: 0.42 },
+  { name: "아케르나르", ra: 24.4, dec: -57.2, mag: 0.46 },
+  { name: "하다르", ra: 210.9, dec: -60.4, mag: 0.61 },
+  { name: "알타이르", ra: 297.7, dec: 8.9, mag: 0.77 },
+  { name: "알데바란", ra: 68.9, dec: 16.5, mag: 0.85 },
+  { name: "안타레스", ra: 247.4, dec: -26.4, mag: 0.96 },
+  { name: "스피카", ra: 201.3, dec: -11.2, mag: 1.04 },
+  { name: "폴룩스", ra: 116.3, dec: 28.0, mag: 1.14 },
+  { name: "포말하우트", ra: 344.4, dec: -29.6, mag: 1.16 },
+  { name: "데네브", ra: 310.4, dec: 45.3, mag: 1.25 },
+  { name: "레굴루스", ra: 152.1, dec: 12.0, mag: 1.35 },
+  { name: "카스토르", ra: 113.6, dec: 31.9, mag: 1.57 },
+  { name: "감마 크루키스", ra: 187.8, dec: -57.1, mag: 1.63 },
+  { name: "벨라트릭스", ra: 81.3, dec: 6.3, mag: 1.64 },
+  { name: "엘나스", ra: 81.6, dec: 28.6, mag: 1.65 },
+  { name: "알니람", ra: 84.0, dec: -1.2, mag: 1.69 },
+  { name: "알니타크", ra: 85.2, dec: -1.9, mag: 1.77 },
+  { name: "알리오트", ra: 193.5, dec: 56.0, mag: 1.76 },
+  { name: "두브헤", ra: 165.9, dec: 61.8, mag: 1.79 },
+  { name: "미르파크", ra: 51.1, dec: 49.9, mag: 1.79 },
+  { name: "웨젠", ra: 107.1, dec: -26.4, mag: 1.83 },
+  { name: "사르가스", ra: 264.3, dec: -43.0, mag: 1.86 },
+  { name: "카우스 아우스트랄리스", ra: 276.0, dec: -34.4, mag: 1.85 },
+  { name: "아비오르", ra: 125.6, dec: -59.5, mag: 1.86 },
+  { name: "알카이드", ra: 206.9, dec: 49.3, mag: 1.86 },
+  { name: "멘칼리난", ra: 89.9, dec: 44.9, mag: 1.90 },
+  { name: "아트리아", ra: 252.2, dec: -69.0, mag: 1.91 },
+  { name: "알헤나", ra: 99.4, dec: 16.4, mag: 1.93 },
+  { name: "폴라리스", ra: 37.9, dec: 89.3, mag: 1.98 },
+  { name: "미자르", ra: 200.9, dec: 54.9, mag: 2.23 },
+  { name: "메라크", ra: 165.5, dec: 56.4, mag: 2.37 },
+  { name: "페크다", ra: 178.5, dec: 53.7, mag: 2.44 },
+  { name: "알파르드", ra: 141.9, dec: -8.7, mag: 1.98 },
 ];
 
 /** mulberry32 — 경량 결정론적 PRNG (시드 → 항상 같은 난수열) */
@@ -75,50 +77,47 @@ export function hashString(s: string): number {
 }
 
 export interface ConstellationStar {
-  x: number; // 0~1 정규화 좌표
+  x: number; // 0~1 정규화 화면 좌표
   y: number;
-  size: number; // 1~3
-  star: RealStar; // 연결된 실제 별
+  size: number;
+  star: RealStar; // 실제 별
 }
 
 export interface Constellation {
   seed: number;
   stars: ConstellationStar[];
-  // 연결 순서 (별 인덱스 쌍)
   links: Array<[number, number]>;
   primaryColor: string;
 }
 
-/**
- * 이름 + 색 + 숫자 → 고유 별자리 생성 (결정론적).
- * 실제 항성 풀에서 5~8개를 뽑아 별자리를 구성하고 선으로 잇는다.
- */
-export function generateConstellation(name: string, color: string, favoriteNumber: number): Constellation {
-  const seed = (hashString(`${name}|${color}|${favoriteNumber}`) ^ (favoriteNumber * 2654435761)) >>> 0;
-  const rng = mulberry32(seed);
-
-  const count = 5 + Math.floor(rng() * 4); // 5~8개
-  // 실제 별 풀에서 중복 없이 선택
-  const pool = [...BRIGHT_STARS];
-  const chosen: RealStar[] = [];
-  for (let i = 0; i < count && pool.length; i++) {
-    const idx = Math.floor(rng() * pool.length);
-    chosen.push(pool.splice(idx, 1)[0]);
-  }
-
-  // 중앙(0.5,0.5) 주변에 별 배치 — 자연스러운 흩뿌림
-  const stars: ConstellationStar[] = chosen.map((star) => {
-    const angle = rng() * Math.PI * 2;
-    const radius = 0.12 + rng() * 0.26;
-    return {
-      x: 0.5 + Math.cos(angle) * radius,
-      y: 0.5 + Math.sin(angle) * radius * 0.85,
-      size: 1.2 + (2.5 - Math.min(star.mag, 2.5)) * 0.7 + rng() * 0.5,
-      star,
-    };
+/** 시드로 뽑은 실제 별들을 실제 적경/적위 상대배치로 화면에 투영 (종횡비 유지) */
+function projectStars(chosen: RealStar[]): ConstellationStar[] {
+  // RA unwrap(0/360 경계 보정) + 적위 cos 보정으로 실제 하늘 형태 근사
+  const refRa = chosen[0].ra;
+  const pts = chosen.map((s) => {
+    let ra = s.ra;
+    while (ra - refRa > 180) ra -= 360;
+    while (ra - refRa < -180) ra += 360;
+    return { x: ra * Math.cos((s.dec * Math.PI) / 180), y: -s.dec, star: s };
   });
 
-  // 가까운 별끼리 잇는 경로(별자리 선) — 최근접 이웃 체인
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const span = Math.max(maxX - minX, maxY - minY, 1e-3);
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const scale = 0.5 / span; // 화면 폭 50% 안에 종횡비 유지하며 배치
+
+  return pts.map((p) => ({
+    x: 0.5 + (p.x - cx) * scale,
+    y: 0.5 + (p.y - cy) * scale,
+    size: 1.4 + (2.6 - Math.min(p.star.mag, 2.6)) * 0.8,
+    star: p.star,
+  }));
+}
+
+/** 최근접 이웃 체인으로 별자리 선 연결 (실제 위치 기준) */
+function buildLinks(stars: ConstellationStar[]): Array<[number, number]> {
   const links: Array<[number, number]> = [];
   const used = new Set<number>([0]);
   let current = 0;
@@ -134,6 +133,26 @@ export function generateConstellation(name: string, color: string, favoriteNumbe
     used.add(best);
     current = best;
   }
+  return links;
+}
 
+/**
+ * 이름 + 색 + 숫자 → 고유 별자리 생성 (결정론적).
+ * 실제 밝은 별 5~8개를 시드로 뽑아, 그 별들의 "실제 적경/적위 상대 위치"로 배치.
+ * → 실제 하늘에서 같은 별들을 찾아 이으면 동일한 모양이 되는 "실제 별자리".
+ */
+export function generateConstellation(name: string, color: string, favoriteNumber: number): Constellation {
+  const seed = (hashString(`${name}|${color}|${favoriteNumber}`) ^ (favoriteNumber * 2654435761)) >>> 0;
+  const rng = mulberry32(seed);
+
+  const count = 5 + Math.floor(rng() * 4); // 5~8개
+  const pool = [...BRIGHT_STARS];
+  const chosen: RealStar[] = [];
+  for (let i = 0; i < count && pool.length; i++) {
+    chosen.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+  }
+
+  const stars = projectStars(chosen);
+  const links = buildLinks(stars);
   return { seed, stars, links, primaryColor: color };
 }

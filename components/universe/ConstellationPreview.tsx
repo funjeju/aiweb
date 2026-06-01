@@ -34,15 +34,20 @@ export function ConstellationPreview({ name, color, favoriteNumber }: { name: st
     }
     ctx.globalAlpha = 1;
 
-    // 별
+    // 별 + 실제 별 이름
     for (const s of c.stars) {
       const px = s.x * w, py = s.y * h, r = s.size * 1.4;
       const glow = ctx.createRadialGradient(px, py, 0, px, py, r * 5);
-      glow.addColorStop(0, color); glow.addColorStop(0.4, `${color}66`); glow.addColorStop(1, "transparent");
+      glow.addColorStop(0, "#fff"); glow.addColorStop(0.3, color); glow.addColorStop(1, "transparent");
       ctx.fillStyle = glow; ctx.globalAlpha = 0.6;
       ctx.beginPath(); ctx.arc(px, py, r * 5, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1; ctx.fillStyle = "#fff";
-      ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px, py, r * 0.9, 0, Math.PI * 2); ctx.fill();
+      // 이름
+      ctx.globalAlpha = 0.55; ctx.fillStyle = "#fff";
+      ctx.font = "9px ui-sans-serif, sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(s.star.name, px, py - r * 2 - 3);
+      ctx.globalAlpha = 1;
     }
   }, [name, color, favoriteNumber]);
 
