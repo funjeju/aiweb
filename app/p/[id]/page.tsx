@@ -67,6 +67,8 @@ export default async function PersonalPage({ params }: Props) {
       ownerId: p.ownerId,
       personalId: p.id,
       selectedAssets: p.universe.selectedAssets,
+      bgm: p.universe.bgm,
+      menuLayout: p.universe.menuLayout,
     };
 
     return (

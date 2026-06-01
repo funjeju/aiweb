@@ -2,21 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store/authStore";
-import { Sparkles, ArrowRight, LayoutDashboard, User, Star, Lock, Unlock } from "lucide-react";
+import { Sparkles, ArrowRight, LayoutDashboard, User, Star, Lock } from "lucide-react";
 
 export default function PrivateLandingPage() {
   const { user } = useAuthStore();
   const router = useRouter();
 
   const goPublicProfile = () => {
-    // 공개용 → 로그인 필수
-    if (user) router.push("/private/create");
-    else router.push("/login?from=/private/create");
+    if (user) router.push("/private/create/profile");
+    else router.push("/login?from=/private/create/profile");
   };
 
   const goUniverse = () => {
-    // 별자리 → 로그인 없이도 시작 가능
-    router.push("/private/create/universe");
+    if (user) router.push("/private/create/universe");
+    else router.push("/login?from=/private/create/universe");
   };
 
   return (
@@ -108,8 +107,8 @@ export default function PrivateLandingPage() {
           </ul>
 
           <div className="flex items-center gap-1.5 mt-auto pt-2">
-            <Unlock size={12} className="text-green-400" />
-            <span className="text-xs text-green-400 font-medium">로그인 없이 시작 가능</span>
+            <Lock size={12} className="text-amber-400" />
+            <span className="text-xs text-amber-400 font-medium">로그인 필요</span>
           </div>
 
           <div className="absolute bottom-5 right-5 opacity-0 group-hover:opacity-100 transition-opacity">

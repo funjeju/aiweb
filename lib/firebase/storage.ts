@@ -44,6 +44,12 @@ export async function uploadPersonalImage(
   return uploadImage(file, path);
 }
 
+export async function uploadPersonalAudio(personalId: string, file: File): Promise<string> {
+  const ext = file.name.split(".").pop() || "mp3";
+  const path = `personals/${personalId}/bgm/${Date.now()}.${ext}`;
+  return uploadImage(file, path); // uploadBytes는 모든 파일에 동작함
+}
+
 export async function deletePersonalImage(url: string): Promise<void> {
   try {
     // Storage URL에서 path 추출 후 삭제

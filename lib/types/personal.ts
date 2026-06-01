@@ -83,9 +83,17 @@ export interface PersonalSchema {
     favoriteNumber: number;
     menus: Array<{ id: string; label: string; icon: UniverseIconType }>;
     style?: UniverseStyle;
-    galleryImages?: string[];  // 레거시 (마이그레이션 완료 후 제거 예정)
-    galleryItems?: GalleryItem[]; // AI 캡션 포함 갤러리
-    selectedAssets?: string[]; // 활성화된 에셋 ID 목록
+    galleryImages?: string[];
+    galleryItems?: GalleryItem[];
+    selectedAssets?: string[];
+    /** BGM 설정 */
+    bgm?: {
+      url: string;
+      name: string;
+      autoPlay?: boolean;
+    };
+    /** 메뉴 노드 위치 커스텀 (key=menu.id, value=top/left %) */
+    menuLayout?: Record<string, { top: string; left: string }>;
   };
 }
 

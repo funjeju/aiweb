@@ -17,24 +17,12 @@ import { ConstellationPreview } from "@/components/universe/ConstellationPreview
 
 const COLOR_PRESETS = ["#a78bfa", "#60a5fa", "#f472b6", "#34d399", "#fbbf24", "#f87171", "#22d3ee", "#c084fc"];
 const PUBLIC_DOMAIN = process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "study.funjeju.com";
-const ANON_KEY = "aiweb_anon_id";
 
 type SlugState = "idle" | "checking" | "ok" | "taken" | "error";
 
-/** 익명 유저 ID — localStorage 기반 */
-function getAnonId(): string {
-  if (typeof window === "undefined") return "anon-ssr";
-  let id = localStorage.getItem(ANON_KEY);
-  if (!id) {
-    id = `anon-${crypto.randomUUID().slice(0, 12)}`;
-    localStorage.setItem(ANON_KEY, id);
-  }
-  return id;
-}
-
 export default function UniverseCreatePage() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, loading: authLoading } = useAuthStore();
 
   const [name, setName] = useState("");
   const [color, setColor] = useState("#a78bfa");
@@ -42,12 +30,16 @@ export default function UniverseCreatePage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
-  // 슬러그
   const [slugInput, setSlugInput] = useState("");
   const [slugState, setSlugState] = useState<SlugState>("idle");
   const [slugError, setSlugError] = useState("");
   const [slugSuggestions, setSlugSuggestions] = useState<string[]>([]);
   const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 로그인 필수
+  useEffect(() => {
+    if (!authLoading && !user) router.replace("/login?from=/private/create/universe");
+  }, [user, authLoading, router]);
 
   const derivedSlug = slugInput || normalizeSlug(name) || "";
 
@@ -72,23 +64,22 @@ export default function UniverseCreatePage() {
   };
 
   const create = async () => {
+    if (!user) { router.replace("/login?from=/private/create/universe"); return; }
     if (!name.trim()) { setError("이름(닉네임)을 입력해주세요"); return; }
     if (slugState === "taken") { setError("다른 주소를 선택해주세요"); return; }
     if (slugState === "checking") { setError("주소 확인 중입니다"); return; }
     setError(""); setCreating(true);
 
     try {
-      const ownerId = user?.uid ?? getAnonId();
       const id = generatePersonalId(name);
       const targetUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/p/${id}`;
       const slugToRegister = derivedSlug || id;
-
-      const regResult = await registerSlug({ slug: slugToRegister, target_url: targetUrl, owner_id: ownerId });
+      const regResult = await registerSlug({ slug: slugToRegister, target_url: targetUrl, owner_id: user.uid });
 
       const def = PERSONA_TYPES.find((t) => t.id === "portfolio")!;
       const now = new Date().toISOString();
       const data: PersonalSchema = {
-        id, ownerId, slug: id,
+        id, ownerId: user.uid, slug: id,
         publicSlug: regResult.final_slug,
         publicUrl: regResult.short_url,
         published: true,
@@ -103,19 +94,12 @@ export default function UniverseCreatePage() {
           favoriteNumber: Number(favoriteNumber) || 7,
           menus: [
             { id: "profile", label: "내 소개", icon: "profile" },
-            { id: "diary", label: "다이어리", icon: "diary" },
-            { id: "gallery", label: "갤러리", icon: "gallery" },
+            { id: "diary",   label: "다이어리", icon: "diary" },
+            { id: "gallery", label: "갤러리",   icon: "gallery" },
           ],
         },
       };
       await createPersonal(data);
-
-      // 익명 유저: 만든 페이지 ID를 localStorage에도 저장
-      if (!user) {
-        const existing = JSON.parse(localStorage.getItem("aiweb_anon_pages") ?? "[]") as string[];
-        localStorage.setItem("aiweb_anon_pages", JSON.stringify([...existing, id]));
-      }
-
       router.push(`/p/${id}`);
     } catch (err) {
       console.error(err);
@@ -123,6 +107,14 @@ export default function UniverseCreatePage() {
       setCreating(false);
     }
   };
+
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#05060f]">
+        <Loader2 className="w-7 h-7 text-violet-400 animate-spin" />
+      </div>
+    );
+  }
 
   if (creating) {
     return (
@@ -143,27 +135,20 @@ export default function UniverseCreatePage() {
           <ArrowLeft size={16} />돌아가기
         </button>
 
-        <div className="inline-flex items-center gap-1.5 bg-green-500/15 border border-green-500/30 text-green-400 text-xs font-semibold px-3 py-1 rounded-full mb-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400" />로그인 없이 시작 가능
-        </div>
-
         <h1 className="text-2xl font-bold mb-1">나만의 별자리 만들기</h1>
-        <p className="text-white/50 text-sm mb-6">닉네임·색·숫자만으로 세상에 하나뿐인 우주가 만들어져요</p>
+        <p className="text-white/50 text-sm mb-6">이름·색·숫자로 세상에 하나뿐인 우주가 만들어져요</p>
 
-        {/* 실시간 별자리 미리보기 */}
         <div className="rounded-2xl overflow-hidden border border-white/10 mb-6 aspect-[4/3]">
           <ConstellationPreview name={name} color={color} favoriteNumber={Number(favoriteNumber) || 7} />
         </div>
 
         <div className="space-y-5">
-          {/* 닉네임 */}
           <div>
-            <label className="block text-sm font-semibold mb-2">닉네임 <span className="text-white/40 font-normal">(실명 아니어도 돼요)</span></label>
+            <label className="block text-sm font-semibold mb-2">닉네임</label>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 밤하늘별이"
               className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/15 focus:border-violet-400 focus:outline-none text-white placeholder-white/30" />
           </div>
 
-          {/* 색 */}
           <div>
             <label className="block text-sm font-semibold mb-2">좋아하는 색</label>
             <div className="flex items-center gap-2 flex-wrap">
@@ -177,7 +162,6 @@ export default function UniverseCreatePage() {
             </div>
           </div>
 
-          {/* 숫자 */}
           <div>
             <label className="block text-sm font-semibold mb-2">좋아하는 숫자</label>
             <input type="number" value={favoriteNumber} onChange={(e) => setFavoriteNumber(e.target.value)}
@@ -219,14 +203,6 @@ export default function UniverseCreatePage() {
               </div>
             )}
           </div>
-
-          {/* 비로그인 안내 */}
-          {!user && (
-            <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-xs text-white/50 leading-relaxed">
-              로그인 없이 만들 수 있지만, 이 브라우저에서만 편집 가능해요.<br />
-              <button onClick={() => router.push("/login?from=/private/create/universe")} className="text-violet-400 underline mt-1">로그인하면 어디서든 편집 가능합니다 →</button>
-            </div>
-          )}
 
           {error && <p className="text-sm text-red-400">{error}</p>}
 
