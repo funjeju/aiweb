@@ -199,6 +199,9 @@ function ProfilePanel({ data, isOwner, onSaved }: {
             </button>
           : <p className="text-white/30 text-sm italic">아직 소개가 작성되지 않았어요.</p>}
 
+      {/* 도메인 주소 + 복사 버튼 */}
+      {data.publicUrl && <UrlCopyRow url={data.publicUrl} color={data.color} />}
+
       {Object.values(socials).some(Boolean) && (
         <div className="flex flex-wrap gap-2">
           {socials.github    && <SocialLink href={socials.github}                icon={<Github    size={12} />} label="GitHub"    />}
@@ -208,6 +211,29 @@ function ProfilePanel({ data, isOwner, onSaved }: {
           {socials.email     && <SocialLink href={`mailto:${socials.email}`}     icon={<Mail      size={12} />} label="이메일"    />}
         </div>
       )}
+    </div>
+  );
+}
+
+function UrlCopyRow({ url, color }: { url: string; color: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5">
+      <Globe size={12} className="text-white/30 shrink-0" />
+      <span className="flex-1 text-xs text-white/50 truncate">{url}</span>
+      <button onClick={copy}
+        className="shrink-0 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors"
+        style={copied
+          ? { backgroundColor: `${color}33`, color }
+          : { color: "rgba(255,255,255,0.35)" }}>
+        {copied ? "✓ 복사됨" : "복사"}
+      </button>
     </div>
   );
 }
