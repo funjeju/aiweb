@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store/authStore";
 import { createPersonal } from "@/lib/firebase/personals";
@@ -12,20 +12,35 @@ import {
   checkSlugAvailable, registerSlug,
 } from "@/lib/slug-registry";
 import { cn } from "@/lib/utils";
-import { ArrowLeft, Sparkles, Loader2, Check, X, Link } from "lucide-react";
+import { ArrowLeft, Sparkles, Loader2, Check, X, Link as LinkIcon } from "lucide-react";
 import { ConstellationPreview } from "@/components/universe/ConstellationPreview";
 
 const COLOR_PRESETS = ["#a78bfa", "#60a5fa", "#f472b6", "#34d399", "#fbbf24", "#f87171", "#22d3ee", "#c084fc"];
-const PUBLIC_DOMAIN = process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "study.funjeju.co";
+const PUBLIC_DOMAIN = process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "study.funjeju.com";
+const ANON_KEY = "aiweb_anon_id";
 
 type SlugState = "idle" | "checking" | "ok" | "taken" | "error";
 
-export default function PrivateCreatePage() {
+/** 익명 유저 ID — localStorage 기반 */
+function getAnonId(): string {
+  if (typeof window === "undefined") return "anon-ssr";
+  let id = localStorage.getItem(ANON_KEY);
+  if (!id) {
+    id = `anon-${crypto.randomUUID().slice(0, 12)}`;
+    localStorage.setItem(ANON_KEY, id);
+  }
+  return id;
+}
+
+export default function UniverseCreatePage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuthStore();
+  const { user } = useAuthStore();
+
   const [name, setName] = useState("");
   const [color, setColor] = useState("#a78bfa");
   const [favoriteNumber, setFavoriteNumber] = useState("7");
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
 
   // 슬러그
   const [slugInput, setSlugInput] = useState("");
@@ -34,40 +49,21 @@ export default function PrivateCreatePage() {
   const [slugSuggestions, setSlugSuggestions] = useState<string[]>([]);
   const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
-
-  // 슬러그 자동채움: 이름 변경 시 빈 슬러그면 자동 제안
-  useEffect(() => {
-    if (slugInput) return;
-    // 이름을 영문 소문자+하이픈으로 변환해 미리보기
-  }, [name, slugInput]);
-
   const derivedSlug = slugInput || normalizeSlug(name) || "";
 
-  // 슬러그 실시간 검사
   const handleSlugChange = (raw: string) => {
     const normalized = normalizeSlug(raw);
     setSlugInput(normalized);
     setSlugSuggestions([]);
-
     const formatErr = normalized ? validateSlugFormat(normalized) : null;
-    if (formatErr) {
-      setSlugState("error");
-      setSlugError(formatErr);
-      return;
-    }
-
+    if (formatErr) { setSlugState("error"); setSlugError(formatErr); return; }
     if (!normalized) { setSlugState("idle"); setSlugError(""); return; }
-
-    setSlugState("checking");
-    setSlugError("");
+    setSlugState("checking"); setSlugError("");
     if (checkTimer.current) clearTimeout(checkTimer.current);
     checkTimer.current = setTimeout(async () => {
       const result = await checkSlugAvailable(normalized);
-      if (result.available) {
-        setSlugState("ok");
-      } else {
+      if (result.available) setSlugState("ok");
+      else {
         setSlugState("taken");
         setSlugError("이미 사용 중인 주소예요");
         setSlugSuggestions(result.suggestions ?? []);
@@ -76,29 +72,23 @@ export default function PrivateCreatePage() {
   };
 
   const create = async () => {
-    if (!name.trim()) { setError("이름을 입력해주세요"); return; }
+    if (!name.trim()) { setError("이름(닉네임)을 입력해주세요"); return; }
     if (slugState === "taken") { setError("다른 주소를 선택해주세요"); return; }
-    if (slugState === "checking") { setError("주소 확인 중입니다. 잠시 기다려주세요"); return; }
-    setError("");
-    setCreating(true);
+    if (slugState === "checking") { setError("주소 확인 중입니다"); return; }
+    setError(""); setCreating(true);
+
     try {
+      const ownerId = user?.uid ?? getAnonId();
       const id = generatePersonalId(name);
       const targetUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/p/${id}`;
       const slugToRegister = derivedSlug || id;
 
-      // Registry 등록
-      const regResult = await registerSlug({
-        slug: slugToRegister,
-        target_url: targetUrl,
-        owner_id: user?.uid,
-      });
+      const regResult = await registerSlug({ slug: slugToRegister, target_url: targetUrl, owner_id: ownerId });
 
       const def = PERSONA_TYPES.find((t) => t.id === "portfolio")!;
       const now = new Date().toISOString();
       const data: PersonalSchema = {
-        id,
-        ownerId: user?.uid ?? "anonymous",
-        slug: id,
+        id, ownerId, slug: id,
         publicSlug: regResult.final_slug,
         publicUrl: regResult.short_url,
         published: true,
@@ -106,7 +96,7 @@ export default function PrivateCreatePage() {
         personaType: "portfolio", themeId: "warm-ocean",
         profile: { name, tagline: "", role: "", bio: "", socials: {} },
         about: "", skills: [], projects: [],
-        contact: { message: "궁금한 점이 있으면 편하게 연락주세요." },
+        contact: { message: "" },
         sections: def.sections,
         universe: {
           color,
@@ -119,24 +109,20 @@ export default function PrivateCreatePage() {
         },
       };
       await createPersonal(data);
+
+      // 익명 유저: 만든 페이지 ID를 localStorage에도 저장
+      if (!user) {
+        const existing = JSON.parse(localStorage.getItem("aiweb_anon_pages") ?? "[]") as string[];
+        localStorage.setItem("aiweb_anon_pages", JSON.stringify([...existing, id]));
+      }
+
       router.push(`/p/${id}`);
     } catch (err) {
-      console.error("personal create failed:", err);
+      console.error(err);
       setError("생성에 실패했습니다. 다시 시도해주세요.");
       setCreating(false);
     }
   };
-
-  // 비로그인 → 로그인 페이지 (생성 후 여기로 돌아오도록 from 파라미터)
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace("/login?from=/private/create");
-    }
-  }, [user, authLoading, router]);
-
-  if (authLoading || !user) {
-    return <div className="min-h-screen flex items-center justify-center bg-[#05060f]"><Loader2 className="w-7 h-7 text-violet-400 animate-spin" /></div>;
-  }
 
   if (creating) {
     return (
@@ -157,8 +143,12 @@ export default function PrivateCreatePage() {
           <ArrowLeft size={16} />돌아가기
         </button>
 
+        <div className="inline-flex items-center gap-1.5 bg-green-500/15 border border-green-500/30 text-green-400 text-xs font-semibold px-3 py-1 rounded-full mb-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400" />로그인 없이 시작 가능
+        </div>
+
         <h1 className="text-2xl font-bold mb-1">나만의 별자리 만들기</h1>
-        <p className="text-white/50 text-sm mb-6">이름·색·숫자로 세상에 하나뿐인 별자리가 만들어져요</p>
+        <p className="text-white/50 text-sm mb-6">닉네임·색·숫자만으로 세상에 하나뿐인 우주가 만들어져요</p>
 
         {/* 실시간 별자리 미리보기 */}
         <div className="rounded-2xl overflow-hidden border border-white/10 mb-6 aspect-[4/3]">
@@ -166,10 +156,10 @@ export default function PrivateCreatePage() {
         </div>
 
         <div className="space-y-5">
-          {/* 이름 */}
+          {/* 닉네임 */}
           <div>
-            <label className="block text-sm font-semibold mb-2">이름</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 김제주"
+            <label className="block text-sm font-semibold mb-2">닉네임 <span className="text-white/40 font-normal">(실명 아니어도 돼요)</span></label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 밤하늘별이"
               className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/15 focus:border-violet-400 focus:outline-none text-white placeholder-white/30" />
           </div>
 
@@ -194,65 +184,58 @@ export default function PrivateCreatePage() {
               className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/15 focus:border-violet-400 focus:outline-none text-white" />
           </div>
 
-          {/* 내 주소 설정 */}
+          {/* 주소 */}
           <div>
-            <label className="block text-sm font-semibold mb-1">내 주소 <span className="text-white/40 font-normal text-xs">(선택 — 비워두면 자동 발급)</span></label>
-
-            {/* 주소 프리뷰 바 */}
-            <div className="flex items-center gap-0 rounded-xl overflow-hidden border border-white/15 mb-2 focus-within:border-violet-400 transition-colors">
+            <label className="block text-sm font-semibold mb-1">내 주소 <span className="text-white/40 font-normal text-xs">(선택 — 비워두면 자동)</span></label>
+            <div className="flex items-center rounded-xl overflow-hidden border border-white/15 mb-2 focus-within:border-violet-400 transition-colors">
               <span className="px-3 py-3 text-sm text-white/40 bg-white/5 border-r border-white/10 whitespace-nowrap shrink-0">
                 {PUBLIC_DOMAIN}/
               </span>
-              <input
-                value={slugInput}
-                onChange={(e) => handleSlugChange(e.target.value)}
-                placeholder={normalizeSlug(name) || "my-slug"}
-                className="flex-1 px-3 py-3 bg-transparent text-sm text-white placeholder-white/25 focus:outline-none"
-              />
+              <input value={slugInput} onChange={(e) => handleSlugChange(e.target.value)}
+                placeholder={normalizeSlug(name) || "my-universe"}
+                className="flex-1 px-3 py-3 bg-transparent text-sm text-white placeholder-white/25 focus:outline-none" />
               <span className="px-3 shrink-0">
                 {slugState === "checking" && <Loader2 size={15} className="animate-spin text-white/40" />}
                 {slugState === "ok" && <Check size={15} className="text-green-400" />}
                 {slugState === "taken" && <X size={15} className="text-red-400" />}
               </span>
             </div>
-
-            {/* 상태 메시지 */}
-            {slugState === "ok" && (
-              <p className="text-xs text-green-400 flex items-center gap-1">
-                <Check size={11} />사용 가능한 주소예요
-              </p>
-            )}
-            {(slugState === "taken" || slugState === "error") && (
-              <p className="text-xs text-red-400">{slugError}</p>
-            )}
+            {slugState === "ok" && <p className="text-xs text-green-400 flex items-center gap-1"><Check size={11} />사용 가능해요</p>}
+            {(slugState === "taken" || slugState === "error") && <p className="text-xs text-red-400">{slugError}</p>}
             {slugSuggestions.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <span className="text-xs text-white/40">추천:</span>
                 {slugSuggestions.map((s) => (
                   <button key={s} onClick={() => handleSlugChange(s)}
-                    className="text-xs px-2.5 py-1 rounded-full bg-violet-500/20 border border-violet-500/40 text-violet-300 hover:bg-violet-500/30 transition-colors">
+                    className="text-xs px-2.5 py-1 rounded-full bg-violet-500/20 border border-violet-500/40 text-violet-300 hover:bg-violet-500/30">
                     {s}
                   </button>
                 ))}
               </div>
             )}
-
-            {/* 확정 주소 미리보기 */}
             {derivedSlug && slugState !== "error" && (
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-white/30">
-                <Link size={11} />
-                <span className="font-mono">{PUBLIC_DOMAIN}/{derivedSlug}</span>
+              <div className="mt-1.5 flex items-center gap-1.5 text-xs text-white/30">
+                <LinkIcon size={10} /><span className="font-mono">{PUBLIC_DOMAIN}/{derivedSlug}</span>
               </div>
             )}
           </div>
 
+          {/* 비로그인 안내 */}
+          {!user && (
+            <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-xs text-white/50 leading-relaxed">
+              로그인 없이 만들 수 있지만, 이 브라우저에서만 편집 가능해요.<br />
+              <button onClick={() => router.push("/login?from=/private/create/universe")} className="text-violet-400 underline mt-1">로그인하면 어디서든 편집 가능합니다 →</button>
+            </div>
+          )}
+
           {error && <p className="text-sm text-red-400">{error}</p>}
 
-          <button onClick={create} disabled={!name.trim() || slugState === "taken" || slugState === "checking"}
+          <button onClick={create}
+            disabled={!name.trim() || slugState === "taken" || slugState === "checking"}
             className={cn("w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-white transition-opacity",
               name.trim() && slugState !== "taken" && slugState !== "checking" ? "hover:opacity-90" : "opacity-40 cursor-not-allowed")}
             style={{ backgroundColor: color }}>
-            <Sparkles size={18} />내 별자리 만들기
+            <Sparkles size={18} />내 별자리 우주 만들기
           </button>
         </div>
       </div>

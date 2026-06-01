@@ -1,29 +1,28 @@
 /**
- * Tool Suite (중앙 URL Registry) API 래퍼.
- * NEXT_PUBLIC_SLUG_REGISTRY_URL 환경변수가 없으면 stub 모드로 동작.
+ * Tool Suite (study.funjeju.com) 슬러그 Registry API 래퍼.
  *
- * API 스펙 확정 시:
- *  1. NEXT_PUBLIC_SLUG_REGISTRY_URL 에 실제 엔드포인트 설정
- *  2. 필요한 경우 NEXT_PUBLIC_SLUG_REGISTRY_KEY 로 인증 헤더 추가
- *  3. 아래 fetch 호출의 body/response 필드명만 실제 스펙에 맞게 조정
+ * .env.local:
+ *   NEXT_PUBLIC_SLUG_REGISTRY_URL=https://study.funjeju.com
+ *   NEXT_PUBLIC_SLUG_REGISTRY_KEY=study-slug-key-2024
+ *   NEXT_PUBLIC_SLUG_DOMAIN=study.funjeju.com
  */
 
-const REGISTRY_URL = process.env.NEXT_PUBLIC_SLUG_REGISTRY_URL ?? "";
+const REGISTRY_URL = (process.env.NEXT_PUBLIC_SLUG_REGISTRY_URL ?? "").replace(/\/$/, "");
 const REGISTRY_KEY = process.env.NEXT_PUBLIC_SLUG_REGISTRY_KEY ?? "";
-const PUBLIC_DOMAIN = process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "study.funjeju.co";
-const PROJECT_TYPE = "constellation";
+const PUBLIC_DOMAIN = process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "study.funjeju.com";
 
 function authHeaders(): Record<string, string> {
-  return REGISTRY_KEY ? { Authorization: `Bearer ${REGISTRY_KEY}` } : {};
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (REGISTRY_KEY) h["x-api-key"] = REGISTRY_KEY;
+  return h;
 }
 
-/* ─── 응답 타입 ─────────────────────────────────────── */
+/* ─── 응답 타입 ─────────────────────────────── */
 
 export interface SlugCreateResult {
   success: boolean;
   final_slug: string;
   short_url: string;
-  /** 중복 시 Registry가 추천한 대안 슬러그 목록 */
   suggestions?: string[];
   error?: string;
 }
@@ -33,7 +32,7 @@ export interface SlugCheckResult {
   suggestions?: string[];
 }
 
-/* ─── 슬러그 형식 검사 (클라이언트 즉시 검증) ─────── */
+/* ─── 형식 검사 / 정규화 ───────────────────── */
 
 export function validateSlugFormat(slug: string): string | null {
   if (slug.length < 3) return "3자 이상 입력해주세요";
@@ -43,7 +42,6 @@ export function validateSlugFormat(slug: string): string | null {
   return null;
 }
 
-/** 입력값 → 슬러그 형식으로 정규화 (영문 소문자 변환 + 허용 외 문자 제거) */
 export function normalizeSlug(raw: string): string {
   return raw
     .toLowerCase()
@@ -53,72 +51,66 @@ export function normalizeSlug(raw: string): string {
     .slice(0, 30);
 }
 
-/* ─── 슬러그 중복 체크 ───────────────────────────── */
+/* ─── 슬러그 중복 체크 ──────────────────────── */
 
 export async function checkSlugAvailable(slug: string): Promise<SlugCheckResult> {
-  if (!REGISTRY_URL) {
-    // stub: 항상 사용 가능 (API 미연결)
-    return { available: true };
-  }
+  if (!REGISTRY_URL) return { available: true };
   try {
     const res = await fetch(`${REGISTRY_URL}/api/slug/check/${encodeURIComponent(slug)}`, {
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: authHeaders(),
     });
+    if (!res.ok) return { available: true };
     return res.json();
   } catch {
-    return { available: true }; // 네트워크 오류 시 낙관적으로 허용
+    return { available: true };
   }
 }
 
-/* ─── 슬러그 등록 (생성 완료 시 호출) ─────────────── */
+/* ─── 슬러그 등록 ───────────────────────────── */
 
 export async function registerSlug(params: {
   slug: string;
   target_url: string;
   owner_id?: string;
 }): Promise<SlugCreateResult> {
-  const { slug, target_url, owner_id } = params;
+  const { slug, target_url } = params;
 
   if (!REGISTRY_URL) {
-    // stub: API 미연결 시 입력값 그대로 반환
-    return {
-      success: true,
-      final_slug: slug,
-      short_url: `${PUBLIC_DOMAIN}/${slug}`,
-    };
+    // stub 모드: API 미설정 시 입력값 그대로 반환
+    return { success: true, final_slug: slug, short_url: `${PUBLIC_DOMAIN}/${slug}` };
   }
 
   try {
     const res = await fetch(`${REGISTRY_URL}/api/slug/create`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders() },
+      headers: authHeaders(),
       body: JSON.stringify({
-        slug,
         target_url,
-        project_type: PROJECT_TYPE,
-        owner_id,
+        preferred_slug: slug,   // API 스펙: preferred_slug
       }),
     });
-    const data: SlugCreateResult = await res.json();
-    return data;
-  } catch (e) {
+    const data = await res.json();
+    // 응답 필드 정규화 (API가 slug/url로 내려줄 수도 있음)
     return {
-      success: false,
-      final_slug: slug,
-      short_url: "",
-      error: "Registry 서버에 연결할 수 없습니다.",
+      success: data.success ?? res.ok,
+      final_slug: data.final_slug ?? data.slug ?? slug,
+      short_url:  data.short_url  ?? data.url  ?? `${PUBLIC_DOMAIN}/${data.final_slug ?? slug}`,
+      suggestions: data.suggestions,
+      error: data.error,
     };
+  } catch (e) {
+    return { success: false, final_slug: slug, short_url: "", error: "Registry 연결 실패" };
   }
 }
 
-/** 기존 슬러그 변경 시 호출 (API 스펙 확정 후 구현) */
+/* ─── 슬러그 변경 ───────────────────────────── */
+
 export async function updateSlug(params: {
   old_slug: string;
   new_slug: string;
   target_url: string;
   owner_id?: string;
 }): Promise<SlugCreateResult> {
-  // TODO: API 스펙 확정 후 PATCH /api/slug/:old_slug 등으로 구현
-  // 현재는 재등록으로 대체
+  // TODO: API에 PATCH /api/slug/:old_slug 생기면 교체
   return registerSlug({ slug: params.new_slug, target_url: params.target_url, owner_id: params.owner_id });
 }

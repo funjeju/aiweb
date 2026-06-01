@@ -64,9 +64,37 @@ export function StarfieldCanvas({
     const color = constellation.primaryColor || "#a78bfa";
     const cs = constellation.stars;
     const [c0, c1, c2] = SKY_GRADIENTS[skyTheme];
-
-    // starGlow 강도 계수
     const glowMult = starGlow === "soft" ? 0.6 : starGlow === "intense" ? 1.6 : 1.0;
+
+    // 별똥별 상태
+    interface ShootingStar {
+      x: number; y: number;
+      vx: number; vy: number;
+      life: number; maxLife: number;
+      len: number; // 꼬리 길이
+    }
+    let shootingStars: ShootingStar[] = [];
+
+    const spawnShootingStar = () => {
+      // 화면 상단 or 좌측에서 출발, 대각선으로 내려감
+      const fromLeft = Math.random() > 0.5;
+      const speed = 12 + Math.random() * 8;
+      const angle = (Math.PI / 5) + Math.random() * (Math.PI / 8); // 36~58도
+      shootingStars.push({
+        x: fromLeft ? -0.05 : Math.random() * 0.9,
+        y: fromLeft ? Math.random() * 0.5 : -0.05,
+        vx: Math.cos(angle) * speed * (fromLeft ? 1 : (Math.random() > 0.5 ? 1 : -1)),
+        vy: Math.sin(angle) * speed,
+        life: 0,
+        maxLife: 70 + Math.floor(Math.random() * 20), // ~1.2초 @60fps
+        len: 0.12 + Math.random() * 0.08,
+      });
+    };
+
+    // 30초마다 별똥별 소환
+    const shootTimer = setInterval(spawnShootingStar, 30000);
+    // 첫 로드 후 5초에 한 번 선제 발사 (첫 방문자 경험)
+    const firstShot = setTimeout(spawnShootingStar, 5000);
 
     const draw = (t: number) => {
       const grad = ctx.createRadialGradient(w / 2, h * 0.42, 0, w / 2, h / 2, Math.max(w, h) * 0.75);
@@ -163,6 +191,46 @@ export function StarfieldCanvas({
       }
       ctx.globalAlpha = 1;
 
+      // 별똥별
+      shootingStars = shootingStars.filter((ss) => ss.life < ss.maxLife);
+      for (const ss of shootingStars) {
+        const progress = ss.life / ss.maxLife;
+        const alpha = progress < 0.15
+          ? progress / 0.15                        // fade in
+          : progress > 0.7
+            ? 1 - (progress - 0.7) / 0.3          // fade out
+            : 1;
+
+        const px = ss.x * w;
+        const py = ss.y * h;
+        const tailX = px - ss.vx * ss.len * w * 0.3;
+        const tailY = py - ss.vy * ss.len * h * 0.3;
+
+        // 꼬리 그라데이션
+        const lg = ctx.createLinearGradient(tailX, tailY, px, py);
+        lg.addColorStop(0, "rgba(255,255,255,0)");
+        lg.addColorStop(0.6, `rgba(255,255,255,${alpha * 0.4})`);
+        lg.addColorStop(1, `rgba(255,255,255,${alpha})`);
+        ctx.strokeStyle = lg;
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = alpha;
+        ctx.beginPath(); ctx.moveTo(tailX, tailY); ctx.lineTo(px, py); ctx.stroke();
+
+        // 머리 글로우
+        const glow = ctx.createRadialGradient(px, py, 0, px, py, 6);
+        glow.addColorStop(0, `rgba(255,255,255,${alpha})`);
+        glow.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = glow;
+        ctx.globalAlpha = alpha * 0.8;
+        ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill();
+
+        // 위치 업데이트
+        ss.x += ss.vx / w;
+        ss.y += ss.vy / h;
+        ss.life++;
+      }
+      ctx.globalAlpha = 1;
+
       // 별자리 별
       for (const s of cs) {
         const px = s.x * w, py = s.y * h;
@@ -201,7 +269,12 @@ export function StarfieldCanvas({
     };
     raf = requestAnimationFrame(draw);
 
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", resize);
+      clearInterval(shootTimer);
+      clearTimeout(firstShot);
+    };
   }, [constellation, showLabels, skyTheme, lineStyle, starGlow]);
 
   return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />;

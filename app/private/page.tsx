@@ -1,97 +1,138 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store/authStore";
-import { Sparkles, ArrowRight, User, Camera, Heart, Palette, LayoutDashboard } from "lucide-react";
-
-function scrollToId(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
-}
+import { Sparkles, ArrowRight, LayoutDashboard, User, Star, Lock, Unlock } from "lucide-react";
 
 export default function PrivateLandingPage() {
   const { user } = useAuthStore();
+  const router = useRouter();
+
+  const goPublicProfile = () => {
+    // 공개용 → 로그인 필수
+    if (user) router.push("/private/create");
+    else router.push("/login?from=/private/create");
+  };
+
+  const goUniverse = () => {
+    // 별자리 → 로그인 없이도 시작 가능
+    router.push("/private/create/universe");
+  };
+
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div className="min-h-screen bg-[#07091a] text-white">
       {/* 상단 바 */}
-      <header className="absolute top-0 left-0 right-0 z-10 px-6 h-16 flex items-center justify-between max-w-5xl mx-auto">
-        <Link href="/private" className="font-bold text-violet-600">My Page</Link>
+      <header className="absolute top-0 left-0 right-0 z-10 px-6 h-16 flex items-center justify-between max-w-3xl mx-auto">
+        <span className="font-bold text-violet-400 text-sm tracking-wide">My Page</span>
         {user && (
-          <Link href="/private/dashboard" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 backdrop-blur border border-violet-100 text-violet-600 text-sm font-semibold hover:bg-white">
-            <LayoutDashboard size={15} />내 페이지
-          </Link>
+          <button onClick={() => router.push("/dashboard?tab=personal")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 backdrop-blur border border-white/10 text-white/70 text-sm font-semibold hover:bg-white/15">
+            <LayoutDashboard size={14} />내 페이지
+          </button>
         )}
       </header>
 
       {/* Hero */}
-      <section className="min-h-[90vh] flex flex-col items-center justify-center text-center px-6 bg-gradient-to-br from-violet-50 to-white">
-        <div className="inline-flex items-center gap-2 bg-violet-100 text-violet-600 text-xs font-semibold px-4 py-1.5 rounded-full mb-6">
-          <Sparkles size={12} />나만의 웹페이지
+      <section className="min-h-[45vh] flex flex-col items-center justify-center text-center px-6 pt-20 pb-8">
+        <div className="inline-flex items-center gap-2 bg-violet-500/20 text-violet-300 text-xs font-semibold px-4 py-1.5 rounded-full mb-5 border border-violet-500/30">
+          <Sparkles size={12} />나만의 웹 공간
         </div>
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-5 leading-tight">
-          나를 표현하는<br /><span className="text-violet-500">디지털 공간</span>
+        <h1 className="text-3xl md:text-5xl font-bold tracking-tight mb-4 leading-tight">
+          어떤 공간을<br />만들고 싶으세요?
         </h1>
-        <p className="text-gray-500 text-base md:text-lg mb-9 max-w-md leading-relaxed">
-          몇 가지 질문에 답하면 AI가 나에게 꼭 맞는<br />개인 홈페이지를 만들어드려요.
+        <p className="text-white/50 text-sm md:text-base max-w-sm">
+          목적에 맞게 두 가지 형태 중 선택하세요
         </p>
-        <Link href="/private/create" className="inline-flex items-center gap-2 bg-violet-500 text-white font-bold px-8 py-4 rounded-2xl text-base hover:bg-violet-600 transition-colors shadow-lg shadow-violet-200">
-          나만의 웹페이지 만들기 <ArrowRight size={18} />
-        </Link>
-        <button onClick={() => scrollToId("how")} className="mt-10 text-sm text-gray-400 hover:text-gray-600">어떻게 만들어지나요? ↓</button>
       </section>
 
-      {/* How */}
-      <section id="how" className="py-24 px-6 max-w-3xl mx-auto">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-500 mb-3 text-center">How it works</p>
-        <h2 className="text-3xl font-bold text-center mb-12">3단계면 충분해요</h2>
-        <div className="space-y-6">
-          {[
-            { n: "01", t: "유형 선택", d: "포트폴리오·기록·취향·크리에이터 중 나에게 맞는 유형을 골라요" },
-            { n: "02", t: "몇 가지 질문", d: "이름·소개·작업물 등 기본 정보를 입력하면 AI가 구성을 짜요" },
-            { n: "03", t: "발행", d: "원페이지 홈페이지가 완성되면 링크로 공유하세요" },
-          ].map((s) => (
-            <div key={s.n} className="flex gap-5 items-start p-5 rounded-2xl bg-violet-50/50">
-              <span className="text-2xl font-bold text-violet-300">{s.n}</span>
-              <div>
-                <p className="font-bold text-lg">{s.t}</p>
-                <p className="text-gray-500 text-sm mt-1">{s.d}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* 두 선택지 카드 */}
+      <section className="max-w-2xl mx-auto px-6 pb-20 grid grid-cols-1 sm:grid-cols-2 gap-5">
 
-      {/* Types */}
-      <section className="py-24 px-6 bg-violet-50/40">
-        <div className="max-w-3xl mx-auto">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-500 mb-3 text-center">Types</p>
-          <h2 className="text-3xl font-bold text-center mb-12">어떤 공간이든</h2>
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { icon: <User className="w-6 h-6" />, t: "포트폴리오", d: "개발자·디자이너·창작자" },
-              { icon: <Camera className="w-6 h-6" />, t: "기록형", d: "일상·생각 기록" },
-              { icon: <Heart className="w-6 h-6" />, t: "취향 공유", d: "음악·영화·책" },
-              { icon: <Palette className="w-6 h-6" />, t: "크리에이터", d: "콘텐츠·작품" },
-            ].map((x, i) => (
-              <div key={i} className="p-5 rounded-2xl bg-white border border-violet-100">
-                <div className="w-11 h-11 rounded-xl bg-violet-100 text-violet-500 flex items-center justify-center mb-3">{x.icon}</div>
-                <p className="font-bold">{x.t}</p>
-                <p className="text-sm text-gray-500 mt-0.5">{x.d}</p>
-              </div>
-            ))}
+        {/* 공개용 개인 웹페이지 */}
+        <button
+          onClick={goPublicProfile}
+          className="group relative text-left rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-indigo-400/40 transition-all duration-200 p-6 flex flex-col gap-4"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center border border-indigo-500/30">
+            <User size={22} className="text-indigo-400" />
           </div>
-        </div>
+
+          <div>
+            <h2 className="text-lg font-bold text-white mb-1.5">공개용 개인 웹페이지</h2>
+            <p className="text-white/50 text-sm leading-relaxed">
+              포트폴리오·기록·취향 공유 등<br />나를 소개하는 실명 홈페이지
+            </p>
+          </div>
+
+          <ul className="space-y-1.5 text-xs text-white/40">
+            <li className="flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-indigo-400" />프로필·소셜 링크 포함</li>
+            <li className="flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-indigo-400" />포트폴리오·프로젝트 등록 가능</li>
+            <li className="flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-indigo-400" />검색 노출·SEO 설정 지원</li>
+          </ul>
+
+          <div className="flex items-center gap-1.5 mt-auto pt-2">
+            <Lock size={12} className="text-amber-400" />
+            <span className="text-xs text-amber-400 font-medium">로그인 필요</span>
+          </div>
+
+          <div className="absolute bottom-5 right-5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <ArrowRight size={18} className="text-indigo-400" />
+          </div>
+        </button>
+
+        {/* 익명 별자리 웹페이지 */}
+        <button
+          onClick={goUniverse}
+          className="group relative text-left rounded-3xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-violet-400/40 transition-all duration-200 p-6 flex flex-col gap-4"
+        >
+          {/* 별자리 배경 글로우 */}
+          <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
+            <div className="absolute top-4 right-6 w-20 h-20 rounded-full bg-violet-500/10 blur-2xl" />
+          </div>
+
+          <div className="w-12 h-12 rounded-2xl bg-violet-500/20 flex items-center justify-center border border-violet-500/30">
+            <Star size={22} className="text-violet-400" />
+          </div>
+
+          <div>
+            <h2 className="text-lg font-bold text-white mb-1.5">익명 별자리 우주</h2>
+            <p className="text-white/50 text-sm leading-relaxed">
+              이름·색·숫자만으로 만드는<br />나만의 감성 우주 홈페이지
+            </p>
+          </div>
+
+          <ul className="space-y-1.5 text-xs text-white/40">
+            <li className="flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-violet-400" />실명 없이 닉네임으로 시작</li>
+            <li className="flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-violet-400" />별자리 우주 인터페이스</li>
+            <li className="flex items-center gap-1.5"><span className="w-1 h-1 rounded-full bg-violet-400" />갤러리·다이어리 메뉴 구성</li>
+          </ul>
+
+          <div className="flex items-center gap-1.5 mt-auto pt-2">
+            <Unlock size={12} className="text-green-400" />
+            <span className="text-xs text-green-400 font-medium">로그인 없이 시작 가능</span>
+          </div>
+
+          <div className="absolute bottom-5 right-5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <ArrowRight size={18} className="text-violet-400" />
+          </div>
+        </button>
       </section>
 
-      {/* CTA */}
-      <section className="py-24 px-6 text-center">
-        <div className="max-w-lg mx-auto bg-gradient-to-br from-violet-500 to-purple-600 rounded-3xl p-10">
-          <h2 className="text-2xl font-bold text-white mb-2">지금 시작해보세요</h2>
-          <p className="text-white/80 text-sm mb-7">무료로 나만의 페이지를 만들 수 있어요</p>
-          <Link href="/private/create" className="inline-flex items-center gap-2 bg-white text-violet-600 font-bold px-7 py-3.5 rounded-2xl hover:bg-gray-50 transition-colors">
-            <Sparkles size={17} />만들기 시작
-          </Link>
-        </div>
-      </section>
+      {/* 배경 별 느낌 점들 */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+        {Array.from({ length: 40 }).map((_, i) => (
+          <div key={i}
+            className="absolute rounded-full bg-white"
+            style={{
+              width: Math.random() * 2 + 0.5 + "px",
+              height: Math.random() * 2 + 0.5 + "px",
+              top: Math.random() * 100 + "%",
+              left: Math.random() * 100 + "%",
+              opacity: Math.random() * 0.4 + 0.1,
+            }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
