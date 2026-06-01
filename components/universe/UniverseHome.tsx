@@ -8,6 +8,8 @@ import { ConstellationPreview } from "./ConstellationPreview";
 import { FloatingAssets } from "./FloatingAssets";
 import { UniverseSettings } from "./UniverseSettings";
 import { generateConstellation, generateConstellationFromSeed } from "@/lib/universe/stars";
+import { getStarLore } from "@/lib/universe/star-lore";
+import type { ConstellationStar } from "@/lib/universe/stars";
 import { getPublishedUniverses, updatePersonal } from "@/lib/firebase/personals";
 import { uploadPersonalImage } from "@/lib/firebase/storage";
 import { useAuthStore } from "@/lib/store/authStore";
@@ -492,6 +494,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   const [showNeighbors, setShowNeighbors] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [clickedStar, setClickedStar] = useState<ConstellationStar | null>(null);
 
   // 로그인 없이 열람 가능한 메뉴
   const PUBLIC_MENUS: UniverseIconType[] = ["profile", "gallery"];
@@ -651,6 +654,9 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         skyTheme={style.skyTheme ?? "deep-space"}
         lineStyle={style.lineStyle ?? "flow"}
         starGlow={style.starGlow ?? "default"}
+        onStarClick={(star) => {
+          if (!openMenu && !showNeighbors && !showSettings) setClickedStar(star);
+        }}
       />
 
       {/* 떠다니는 에셋 */}
@@ -766,6 +772,34 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
 
       {/* 로그인 유도 모달 */}
       {showLoginPrompt && <LoginPrompt onClose={() => setShowLoginPrompt(false)} />}
+
+      {/* 별 클릭 설명 모달 */}
+      {clickedStar && (() => {
+        const lore = getStarLore(clickedStar.star.name);
+        return (
+          <div className="absolute inset-0 z-30 flex items-end sm:items-center justify-center"
+            onClick={() => setClickedStar(null)}>
+            <div className="w-full sm:max-w-sm mx-auto bg-black/50 backdrop-blur-xl border border-white/10 rounded-t-3xl sm:rounded-3xl p-7 m-0 sm:m-4"
+              onClick={(e) => e.stopPropagation()}>
+              {/* 별 아이콘 + 밝기 */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: `${data.color}22`, boxShadow: `0 0 24px ${data.color}66` }}>
+                  <span className="text-white text-xl">✦</span>
+                </div>
+                <div>
+                  <p className="text-white font-bold text-base">{clickedStar.star.name}</p>
+                  <p className="text-white/40 text-xs">등급 {clickedStar.star.mag.toFixed(2)} · {lore.title}</p>
+                </div>
+                <button onClick={() => setClickedStar(null)} className="ml-auto text-white/30 hover:text-white">
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="text-white/70 text-sm leading-relaxed">{lore.desc}</p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 설정 패널 */}
       {showSettings && data.personalId && (

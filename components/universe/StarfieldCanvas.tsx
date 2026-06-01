@@ -21,9 +21,11 @@ const SKY_GRADIENTS: Record<SkyTheme, [string, string, string]> = {
 export function StarfieldCanvas({
   constellation, showLabels = true,
   skyTheme = "deep-space", lineStyle = "flow", starGlow = "default",
+  onStarClick,
 }: {
   constellation: Constellation;
   showLabels?: boolean;
+  onStarClick?: (star: import("@/lib/universe/stars").ConstellationStar) => void;
 } & StyleProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -300,5 +302,29 @@ export function StarfieldCanvas({
     };
   }, [constellation, showLabels, skyTheme, lineStyle, starGlow]);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />;
+  const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!onStarClick) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const nx = (e.clientX - rect.left) / rect.width;
+    const ny = (e.clientY - rect.top) / rect.height;
+    // 클릭 반경 (정규화 좌표 기준 6%)
+    const THRESHOLD = 0.06;
+    let closest = null as import("@/lib/universe/stars").ConstellationStar | null;
+    let minDist = Infinity;
+    for (const star of constellation.stars) {
+      const dist = Math.sqrt((star.x - nx) ** 2 + (star.y - ny) ** 2);
+      if (dist < THRESHOLD && dist < minDist) { minDist = dist; closest = star; }
+    }
+    if (closest) onStarClick(closest);
+  };
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full cursor-pointer"
+      onClick={handleClick}
+    />
+  );
 }
