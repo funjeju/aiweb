@@ -69,6 +69,7 @@ export default async function PersonalPage({ params }: Props) {
       role: p.profile.role,
       socials: p.profile.socials,
       galleryItems,
+      publicUrl: p.publicUrl,
       ownerId: p.ownerId,
       personalId: p.id,
       selectedAssets: p.universe.selectedAssets,

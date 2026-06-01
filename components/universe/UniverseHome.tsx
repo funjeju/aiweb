@@ -52,6 +52,7 @@ export interface UniverseData {
   menuLayoutMobile?: Record<string, { top: string; left: string }>;
   assetPositions?: Record<string, { top: string; left: string }>;
   assetPositionsMobile?: Record<string, { top: string; left: string }>;
+  publicUrl?: string;
   ownerId?: string;
   personalId?: string;
 }
@@ -693,10 +694,17 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         )}
       </div>
 
-      {/* 중앙 별자리 이름 */}
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none z-10">
-        <p className="text-xs uppercase tracking-[0.3em] mb-2" style={{ color: data.color }}>{ui.constellationOf}</p>
-        <h1 className="text-2xl md:text-3xl font-bold text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.4)]">
+      {/* 별자리 이름 — 모바일: 상단, 데스크탑: 중앙 */}
+      <div className={cn(
+        "absolute left-1/2 -translate-x-1/2 text-center pointer-events-none z-10",
+        isMobile
+          ? "top-16 px-4 w-full"
+          : "top-1/2 -translate-y-1/2"
+      )}>
+        <p className={cn("uppercase tracking-[0.25em] mb-1", isMobile ? "text-[10px]" : "text-xs")}
+          style={{ color: data.color }}>{ui.constellationOf}</p>
+        <h1 className={cn("font-bold text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.4)]",
+          isMobile ? "text-xl" : "text-2xl md:text-3xl")}>
           {data.name}<span className="text-white/60">{ui.suffix}</span>
         </h1>
       </div>
