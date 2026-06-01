@@ -8,35 +8,70 @@ import { SECTION_LABEL } from "@/lib/types/personal";
 import { getThemeTokens } from "@/lib/design/tokens";
 import { useAuthStore } from "@/lib/store/authStore";
 import { cn } from "@/lib/utils";
+import { useLang, fetchTranslations } from "@/lib/i18n/useLang";
+import { collectPersonalTexts, applyPersonalTexts } from "@/lib/i18n/translatePersonal";
+import { LangToggle } from "@/components/i18n/LangToggle";
 import { Github, Linkedin, Instagram, Twitter, Globe, Mail, Phone, ArrowUpRight, Menu, X, Pencil } from "lucide-react";
 
 function scrollToId(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-export function PersonalSite({ data }: { data: PersonalSchema }) {
-  const theme = getThemeTokens(data.themeId);
+export function PersonalSite({ data: original }: { data: PersonalSchema }) {
+  const theme = getThemeTokens(original.themeId);
   const { user } = useAuthStore();
   const [menuOpen, setMenuOpen] = useState(false);
-  const sections = data.sections;
-  const isOwner = user?.uid === data.ownerId;
+  const isOwner = user?.uid === original.ownerId;
 
+  const { lang, setLang } = useLang();
+  const [loading, setLoading] = useState(false);
+  const [cache, setCache] = useState<Record<string, PersonalSchema>>({ ko: original });
+  const [data, setData] = useState<PersonalSchema>(original);
+
+  const switchLang = async (target: typeof lang) => {
+    if (target === lang || loading) return;
+    if (cache[target]) { setData(cache[target]); setLang(target); return; }
+    setLoading(true);
+    try {
+      const texts = collectPersonalTexts(original);
+      const translations = await fetchTranslations(texts, target);
+      const translated = applyPersonalTexts(original, translations);
+      setCache((c) => ({ ...c, [target]: translated }));
+      setData(translated);
+      setLang(target);
+    } catch { /* 실패 시 원문 유지 */ }
+    finally { setLoading(false); }
+  };
+
+  const sections = data.sections;
   const socials = data.profile.socials || {};
   const socialIcons: Array<{ key: keyof typeof socials; icon: React.ReactNode }> = [
-    { key: "github", icon: <Github size={18} /> },
-    { key: "linkedin", icon: <Linkedin size={18} /> },
+    { key: "github",    icon: <Github size={18} /> },
+    { key: "linkedin",  icon: <Linkedin size={18} /> },
     { key: "instagram", icon: <Instagram size={18} /> },
-    { key: "twitter", icon: <Twitter size={18} /> },
-    { key: "website", icon: <Globe size={18} /> },
+    { key: "twitter",   icon: <Twitter size={18} /> },
+    { key: "website",   icon: <Globe size={18} /> },
   ];
+
+  // Contact 섹션 UI 텍스트 번역
+  const t = {
+    contactTitle:   lang === "en" ? "Let's Talk"       : lang === "zh" ? "联系我" : "함께 이야기해요",
+    viewProjects:   lang === "en" ? "View Projects"    : lang === "zh" ? "查看项目" : "프로젝트 보기",
+    contactMe:      lang === "en" ? "Contact"          : lang === "zh" ? "联系" : "연락하기",
+  };
 
   return (
     <div style={{ backgroundColor: theme.surface, color: theme.text }}>
+      {/* 언어 토글 — 우상단 고정 */}
+      <div className="fixed top-3 right-3 z-50">
+        <LangToggle lang={lang} loading={loading} onSwitch={switchLang} theme="light" />
+      </div>
+
       {/* 네비게이션 */}
       <header className="sticky top-0 z-40 backdrop-blur" style={{ backgroundColor: `${theme.surface}e6`, borderBottom: `1px solid ${theme.border}` }}>
         <div className="max-w-5xl mx-auto px-5 h-16 flex items-center justify-between">
           <button onClick={() => scrollToId("hero")} className="text-xl font-bold" style={{ color: theme.primary }}>
-            {data.profile.name || "My Page"}
+            {original.profile.name || "My Page"}
           </button>
           <nav className="hidden md:flex items-center gap-7">
             {sections.map((s) => (
@@ -45,7 +80,9 @@ export function PersonalSite({ data }: { data: PersonalSchema }) {
               </button>
             ))}
           </nav>
-          <button className="md:hidden" onClick={() => setMenuOpen((v) => !v)}>{menuOpen ? <X size={22} /> : <Menu size={22} />}</button>
+          <button className="md:hidden" onClick={() => setMenuOpen((v) => !v)}>
+            {menuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
         </div>
         {menuOpen && (
           <div className="md:hidden border-t px-5 py-3 flex flex-col gap-1" style={{ borderColor: theme.border }}>
@@ -58,22 +95,21 @@ export function PersonalSite({ data }: { data: PersonalSchema }) {
         )}
       </header>
 
-      {sections.includes("hero") && <HeroSection data={data} theme={theme} socials={socials} socialIcons={socialIcons} />}
+      {sections.includes("hero") && <HeroSection data={data} theme={theme} socials={socials} socialIcons={socialIcons} t={t} />}
       {sections.includes("about") && <AboutSection data={data} theme={theme} />}
       {sections.includes("skills") && <SkillsSection data={data} theme={theme} />}
       {sections.includes("projects") && <ProjectsSection data={data} theme={theme} />}
-      {sections.includes("contact") && <ContactSection data={data} theme={theme} />}
+      {sections.includes("contact") && <ContactSection data={data} theme={theme} t={t} />}
 
       <footer className="text-center py-8 text-xs" style={{ color: theme.textMuted, borderTop: `1px solid ${theme.border}` }}>
-        © {new Date().getFullYear()} {data.profile.name}. All rights reserved.
+        © {new Date().getFullYear()} {original.profile.name}. All rights reserved.
       </footer>
 
-      {/* 소유자 편집 버튼 */}
       {isOwner && (
         <Link href={`/private/edit/${data.id}`}
           className="fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-full text-white font-semibold shadow-lg"
           style={{ backgroundColor: theme.primary }}>
-          <Pencil size={16} />편집
+          <Pencil size={16} />{lang === "en" ? "Edit" : lang === "zh" ? "编辑" : "편집"}
         </Link>
       )}
     </div>
@@ -81,7 +117,7 @@ export function PersonalSite({ data }: { data: PersonalSchema }) {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function HeroSection({ data, theme, socials, socialIcons }: any) {
+function HeroSection({ data, theme, socials, socialIcons, t }: any) {
   return (
     <section id="hero" className="max-w-5xl mx-auto px-5 py-20 md:py-28 grid md:grid-cols-2 gap-10 items-center">
       <div>
@@ -91,10 +127,10 @@ function HeroSection({ data, theme, socials, socialIcons }: any) {
         {data.profile.bio && <p className="text-sm md:text-base leading-relaxed mb-8" style={{ color: theme.textMuted }}>{data.profile.bio}</p>}
         <div className="flex flex-wrap gap-3 mb-6">
           <button onClick={() => scrollToId("projects")} className="flex items-center gap-1.5 px-5 py-3 rounded-full text-white font-semibold text-sm" style={{ backgroundColor: theme.primary }}>
-            프로젝트 보기 <ArrowUpRight size={16} />
+            {t.viewProjects} <ArrowUpRight size={16} />
           </button>
           <button onClick={() => scrollToId("contact")} className="flex items-center gap-1.5 px-5 py-3 rounded-full font-semibold text-sm border" style={{ borderColor: theme.border, color: theme.text }}>
-            연락하기 <Mail size={15} />
+            {t.contactMe} <Mail size={15} />
           </button>
         </div>
         <div className="flex gap-3">
@@ -151,8 +187,7 @@ function ProjectsSection({ data, theme }: any) {
             <a key={p.id} href={p.link || "#"} target={p.link ? "_blank" : undefined} rel="noopener noreferrer"
               className="group rounded-2xl overflow-hidden" style={{ backgroundColor: theme.surface, border: `1px solid ${theme.border}` }}>
               <div className="relative aspect-[16/10] overflow-hidden" style={{ backgroundColor: theme.accent }}>
-                {p.image
-                  ? <Image src={p.image} alt={p.title} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
+                {p.image ? <Image src={p.image} alt={p.title} fill className="object-cover group-hover:scale-105 transition-transform duration-500" />
                   : <div className="absolute inset-0 flex items-center justify-center text-3xl opacity-30">🗂️</div>}
               </div>
               <div className="p-4">
@@ -171,12 +206,12 @@ function ProjectsSection({ data, theme }: any) {
   );
 }
 
-function ContactSection({ data, theme }: any) {
+function ContactSection({ data, theme, t }: any) {
   return (
     <section id="contact" className="py-24 px-5">
       <div className="max-w-xl mx-auto text-center">
         <p className="text-xs font-bold uppercase tracking-[0.2em] mb-4" style={{ color: theme.primary }}>● Contact</p>
-        <h2 className="text-3xl font-bold mb-3">함께 이야기해요</h2>
+        <h2 className="text-3xl font-bold mb-3">{t.contactTitle}</h2>
         {data.contact?.message && <p className="mb-8" style={{ color: theme.textMuted }}>{data.contact.message}</p>}
         <div className="flex flex-col items-center gap-3">
           {data.contact?.email && (

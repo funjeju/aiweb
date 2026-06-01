@@ -13,6 +13,9 @@ import { uploadPersonalImage } from "@/lib/firebase/storage";
 import { useAuthStore } from "@/lib/store/authStore";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
 import type { PersonalSchema, UniverseIconType, UniverseStyle, GalleryItem } from "@/lib/types/personal";
+import { useLang, fetchTranslations } from "@/lib/i18n/useLang";
+import { collectUniverseTexts, applyUniverseTexts } from "@/lib/i18n/translatePersonal";
+import { LangToggle } from "@/components/i18n/LangToggle";
 import {
   User, BookOpen, Image as ImageIcon, Sparkles, X,
   Link2, Music, FileText, ArrowRight, Loader2,
@@ -41,6 +44,7 @@ export interface UniverseData {
   selectedAssets?: string[];
   bgm?: { url: string; name: string; autoPlay?: boolean };
   menuLayout?: Record<string, { top: string; left: string }>;
+  assetPositions?: Record<string, { top: string; left: string }>;
   ownerId?: string;
   personalId?: string;
 }
@@ -178,7 +182,11 @@ function GalleryPanel({ data, isOwner }: { data: UniverseData; isOwner: boolean 
         } catch { /* 캡션 실패해도 진행 */ }
         setLocalItems((prev) => {
           const updated = [...prev, { url, caption }];
-          if (data.personalId) updatePersonal(data.personalId, { universe: { galleryItems: updated } as never }).catch(console.error);
+          if (data.personalId) {
+            // dot-notation으로 universe.galleryItems 필드만 업데이트 (다른 필드 덮어쓰기 방지)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            updatePersonal(data.personalId, { "universe.galleryItems": updated } as any).catch(console.error);
+          }
           return updated;
         });
       }
@@ -342,6 +350,13 @@ function BgmPlayer({ bgm, color }: { bgm: NonNullable<UniverseData["bgm"]>; colo
 
 /* ─── 메인 컴포넌트 ────────────────────────────── */
 
+/* UI 텍스트 정적 번역 */
+const UI = {
+  ko: { constellationOf: "Constellation of", suffix: "님의 별자리", neighbor: "랜덤 이웃 구경", backTo: "내 우주로", settings: "설정" },
+  en: { constellationOf: "Constellation of", suffix: "'s Universe",  neighbor: "Visit Neighbors",  backTo: "My Universe", settings: "Settings" },
+  zh: { constellationOf: "属于",               suffix: "的宇宙",        neighbor: "随机邻居",          backTo: "我的宇宙",  settings: "设置" },
+} as const;
+
 export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   const [data, setData] = useState(initialData);
   const constellation = generateConstellation(data.name, data.color, data.favoriteNumber);
@@ -354,15 +369,40 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   const { user } = useAuthStore();
   const isOwner = !!user && !!data.ownerId && user.uid === data.ownerId;
 
+  // 다국어
+  const { lang, setLang } = useLang();
+  const [langLoading, setLangLoading] = useState(false);
+  const [transCache, setTransCache] = useState<Record<string, { about: string; tagline: string; role: string }>>({});
+
+  // 현재 표시할 번역된 콘텐츠
+  const displayed = transCache[lang] ?? { about: initialData.about ?? "", tagline: initialData.tagline ?? "", role: initialData.role ?? "" };
+
+  const switchLang = async (target: typeof lang) => {
+    if (target === lang || langLoading) return;
+    setLang(target);
+    if (target === "ko" || transCache[target]) return;
+    setLangLoading(true);
+    try {
+      const texts = collectUniverseTexts(initialData.about ?? "", initialData.tagline ?? "", initialData.role ?? "");
+      const translations = await fetchTranslations(texts, target);
+      const applied = applyUniverseTexts(translations);
+      setTransCache((c) => ({ ...c, [target]: applied }));
+    } catch { /* 원문 유지 */ }
+    finally { setLangLoading(false); }
+  };
+
+  const ui = UI[lang];
+
   const style = data.style ?? {};
 
   // 설정 저장 후 로컬 상태 갱신
-  const handleSettingsSaved = (state: { selectedAssets: string[]; bgm: { url: string; name: string; autoPlay: boolean } | null; menuLayout: Record<string, { top: string; left: string }> }) => {
+  const handleSettingsSaved = (state: { selectedAssets: string[]; bgm: { url: string; name: string; autoPlay: boolean } | null; menuLayout: Record<string, { top: string; left: string }>; assetPositions: Record<string, { top: string; left: string }> }) => {
     setData((prev) => ({
       ...prev,
       selectedAssets: state.selectedAssets,
       bgm: state.bgm ?? undefined,
       menuLayout: Object.keys(state.menuLayout).length > 0 ? state.menuLayout : undefined,
+      assetPositions: Object.keys(state.assetPositions).length > 0 ? state.assetPositions : undefined,
     }));
   };
 
@@ -381,30 +421,37 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
 
       {/* 떠다니는 에셋 */}
       {data.selectedAssets && data.selectedAssets.length > 0 && (
-        <FloatingAssets selectedIds={data.selectedAssets} seed={constellation.seed} />
+        <FloatingAssets
+          selectedIds={data.selectedAssets}
+          seed={constellation.seed}
+          customPositions={data.assetPositions}
+        />
       )}
 
       {/* ← 이전 우주로 돌아가기 */}
       {fromId && (
         <a href={`/p/${fromId}`}
           className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-3 py-2 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/70 text-xs font-medium hover:bg-black/50 hover:text-white transition-colors">
-          <ChevronLeft size={14} />내 우주로
+          <ChevronLeft size={14} />{ui.backTo}
         </a>
       )}
 
-      {/* 오너 전용 — 우상단 설정 버튼 */}
-      {isOwner && (
-        <button onClick={() => setShowSettings(true)}
-          className="absolute top-4 right-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white transition-colors">
-          <Settings size={13} />설정
-        </button>
-      )}
+      {/* 우상단: 언어 토글 + 설정 버튼 */}
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+        <LangToggle lang={lang} loading={langLoading} onSwitch={switchLang} theme="dark" />
+        {isOwner && (
+          <button onClick={() => setShowSettings(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white transition-colors">
+            <Settings size={13} />{ui.settings}
+          </button>
+        )}
+      </div>
 
       {/* 중앙 별자리 이름 */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none z-10">
-        <p className="text-xs uppercase tracking-[0.3em] mb-2" style={{ color: data.color }}>Constellation of</p>
+        <p className="text-xs uppercase tracking-[0.3em] mb-2" style={{ color: data.color }}>{ui.constellationOf}</p>
         <h1 className="text-2xl md:text-3xl font-bold text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.4)]">
-          {data.name}<span className="text-white/60">님의 별자리</span>
+          {data.name}<span className="text-white/60">{ui.suffix}</span>
         </h1>
       </div>
 
@@ -432,7 +479,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         <button className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold text-white backdrop-blur-sm border"
           style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}66` }}
           onClick={() => setShowNeighbors(true)}>
-          <Sparkles size={15} />랜덤 이웃 구경
+          <Sparkles size={15} />{ui.neighbor}
         </button>
       </div>
 
@@ -448,7 +495,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
               <button onClick={() => setOpenMenu(null)} className="text-white/50 hover:text-white"><X size={20} /></button>
             </div>
             <div className="overflow-y-auto flex-1 min-h-[80px]">
-              <MenuContent menu={openMenu} data={data} isOwner={isOwner} />
+              <MenuContent menu={openMenu} data={{ ...data, about: displayed.about, tagline: displayed.tagline, role: displayed.role }} isOwner={isOwner} />
             </div>
           </div>
         </div>
@@ -465,6 +512,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           initialAssets={data.selectedAssets ?? []}
           initialBgm={data.bgm}
           initialLayout={data.menuLayout}
+          initialAssetPositions={data.assetPositions}
           allAssets={DEFAULT_ASSETS}
           onClose={() => setShowSettings(false)}
           onSaved={handleSettingsSaved}

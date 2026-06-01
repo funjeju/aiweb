@@ -27,29 +27,30 @@ export function FloatingAssets({
   selectedIds,
   seed,
   allAssets = DEFAULT_ASSETS,
+  customPositions = {},
 }: {
   selectedIds: string[];
   seed: number;
   allAssets?: UniverseAsset[];
+  customPositions?: Record<string, { top: string; left: string }>;
 }) {
   const placed = useMemo<PlacedAsset[]>(() => {
     const rng = seededRandom(seed ^ 0xdeadbeef);
     return selectedIds.flatMap((id) => {
       const asset = allAssets.find((a) => a.id === id);
       if (!asset) return [];
-      // orbit/shoot 타입은 여러 인스턴스 없이 1개만
-      const count = asset.animationType === "orbit" ? 1 : 1;
-      return Array.from({ length: count }, () => ({
+      const custom = customPositions[id];
+      return [{
         asset,
-        top: `${10 + rng() * 75}%`,
-        left: `${5 + rng() * 85}%`,
+        top: custom?.top ?? `${10 + rng() * 75}%`,
+        left: custom?.left ?? `${5 + rng() * 85}%`,
         size: 28 + Math.floor(rng() * 20),
         duration: 4 + rng() * 6,
         delay: rng() * 4,
         amplitude: 10 + rng() * 20,
-      }));
+      }];
     });
-  }, [selectedIds, seed, allAssets]);
+  }, [selectedIds, seed, allAssets, customPositions]);
 
   if (placed.length === 0) return null;
 

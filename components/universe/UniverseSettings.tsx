@@ -19,6 +19,7 @@ interface SettingsState {
   selectedAssets: string[];
   bgm: { url: string; name: string; autoPlay: boolean } | null;
   menuLayout: Record<string, { top: string; left: string }>;
+  assetPositions: Record<string, { top: string; left: string }>;
 }
 
 const DEFAULT_POS = [
@@ -39,40 +40,67 @@ const ICON_MAP: Record<string, string> = {
 function LayoutTab({
   menus,
   layout,
-  onChange,
+  onLayoutChange,
+  selectedAssets,
+  assetPositions,
+  onAssetPosChange,
+  allAssets,
 }: {
   menus: MenuNode[];
   layout: Record<string, { top: string; left: string }>;
-  onChange: (layout: Record<string, { top: string; left: string }>) => void;
+  onLayoutChange: (layout: Record<string, { top: string; left: string }>) => void;
+  selectedAssets: string[];
+  assetPositions: Record<string, { top: string; left: string }>;
+  onAssetPosChange: (pos: Record<string, { top: string; left: string }>) => void;
+  allAssets: UniverseAsset[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // draggingId: "{menu|asset}:{id}" 형태
   const draggingId = useRef<string | null>(null);
 
-  const getPos = (id: string, i: number) =>
+  const getMenuPos = (id: string, i: number) =>
     layout[id] ?? DEFAULT_POS[i] ?? { top: "50%", left: "50%" };
 
-  const parsePercent = (val: string) => parseFloat(val) / 100;
+  // 에셋 기본 위치 (시드 없이 균등 배치)
+  const getAssetDefaultPos = (idx: number, total: number) => ({
+    top: `${20 + (idx / Math.max(total - 1, 1)) * 60}%`,
+    left: `${15 + (idx % 2 === 0 ? 20 : 60)}%`,
+  });
 
-  const handlePointerDown = (e: React.PointerEvent, id: string) => {
+  const handlePointerDown = (e: React.PointerEvent, key: string) => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    draggingId.current = id;
+    draggingId.current = key;
   };
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!draggingId.current || !containerRef.current) return;
+    const key = draggingId.current;
+    if (!key || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const top = Math.min(95, Math.max(5, ((e.clientY - rect.top) / rect.height) * 100)).toFixed(1) + "%";
-    const left = Math.min(95, Math.max(5, ((e.clientX - rect.left) / rect.width) * 100)).toFixed(1) + "%";
-    onChange({ ...layout, [draggingId.current]: { top, left } });
-  }, [layout, onChange]);
+    const top = Math.min(94, Math.max(4, ((e.clientY - rect.top) / rect.height) * 100)).toFixed(1) + "%";
+    const left = Math.min(94, Math.max(4, ((e.clientX - rect.left) / rect.width) * 100)).toFixed(1) + "%";
+
+    if (key.startsWith("menu:")) {
+      const id = key.slice(5);
+      onLayoutChange({ ...layout, [id]: { top, left } });
+    } else if (key.startsWith("asset:")) {
+      const id = key.slice(6);
+      onAssetPosChange({ ...assetPositions, [id]: { top, left } });
+    }
+  }, [layout, assetPositions, onLayoutChange, onAssetPosChange]);
 
   const handlePointerUp = () => { draggingId.current = null; };
 
-  const resetLayout = () => onChange({});
-
   return (
     <div className="space-y-3">
-      <p className="text-xs text-white/50">메뉴 노드를 드래그해서 원하는 위치에 배치하세요.</p>
+      <p className="text-xs text-white/50">
+        메뉴 노드와 에셋을 드래그해서 원하는 위치에 배치하세요.
+      </p>
+
+      {/* 범례 */}
+      <div className="flex items-center gap-4 text-[10px] text-white/40">
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-violet-500/50 border border-violet-400/60 inline-block" />메뉴 노드</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-amber-500/30 border border-amber-400/50 inline-block" />에셋</span>
+      </div>
 
       {/* 드래그 영역 */}
       <div
@@ -80,9 +108,9 @@ function LayoutTab({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         className="relative w-full rounded-2xl overflow-hidden border border-white/10 bg-[#05060f] select-none"
-        style={{ aspectRatio: "9/16", maxHeight: 360 }}
+        style={{ aspectRatio: "9/16", maxHeight: 380 }}
       >
-        {/* 배경 별 느낌 */}
+        {/* 배경 별 */}
         <div className="absolute inset-0 opacity-20">
           {Array.from({ length: 30 }).map((_, i) => (
             <div key={i} className="absolute w-0.5 h-0.5 rounded-full bg-white"
@@ -90,23 +118,20 @@ function LayoutTab({
           ))}
         </div>
 
-        {/* 중앙 별자리 이름 자리 */}
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white/20 text-xs text-center pointer-events-none">
           ✦ 별자리
         </div>
 
-        {/* 드래그 가능한 메뉴 노드 */}
+        {/* 메뉴 노드 */}
         {menus.slice(0, 6).map((menu, i) => {
-          const pos = getPos(menu.id, i);
+          const pos = getMenuPos(menu.id, i);
           return (
-            <div
-              key={menu.id}
-              onPointerDown={(e) => handlePointerDown(e, menu.id)}
-              className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing touch-none"
-              style={{ top: pos.top, left: pos.left }}
-            >
+            <div key={`m-${menu.id}`}
+              onPointerDown={(e) => handlePointerDown(e, `menu:${menu.id}`)}
+              className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing touch-none z-10"
+              style={{ top: pos.top, left: pos.left }}>
               <div className="flex flex-col items-center gap-1">
-                <div className="w-9 h-9 rounded-full bg-violet-500/30 border border-violet-400/60 flex items-center justify-center text-sm shadow-lg shadow-violet-500/20">
+                <div className="w-9 h-9 rounded-full bg-violet-500/30 border border-violet-400/60 flex items-center justify-center text-sm">
                   {ICON_MAP[menu.id] ?? "⭐"}
                 </div>
                 <span className="text-[9px] text-white/70 whitespace-nowrap">{menu.label}</span>
@@ -114,12 +139,39 @@ function LayoutTab({
             </div>
           );
         })}
+
+        {/* 에셋 */}
+        {selectedAssets.map((assetId, i) => {
+          const asset = allAssets.find((a) => a.id === assetId);
+          if (!asset) return null;
+          const pos = assetPositions[assetId] ?? getAssetDefaultPos(i, selectedAssets.length);
+          return (
+            <div key={`a-${assetId}`}
+              onPointerDown={(e) => handlePointerDown(e, `asset:${assetId}`)}
+              className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing touch-none z-10"
+              style={{ top: pos.top, left: pos.left }}>
+              <div className="flex flex-col items-center gap-0.5">
+                <div className="w-9 h-9 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-lg">
+                  {asset.emoji}
+                </div>
+                <span className="text-[9px] text-white/50 whitespace-nowrap">{asset.name}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      <button onClick={resetLayout}
-        className="text-xs text-white/30 hover:text-white/60 transition-colors">
-        기본 위치로 초기화
-      </button>
+      <div className="flex gap-3">
+        <button onClick={() => onLayoutChange({})}
+          className="text-xs text-white/30 hover:text-white/60 transition-colors">
+          메뉴 위치 초기화
+        </button>
+        <span className="text-white/20">·</span>
+        <button onClick={() => onAssetPosChange({})}
+          className="text-xs text-white/30 hover:text-white/60 transition-colors">
+          에셋 위치 초기화
+        </button>
+      </div>
     </div>
   );
 }
@@ -271,6 +323,7 @@ export function UniverseSettings({
   initialAssets,
   initialBgm,
   initialLayout,
+  initialAssetPositions,
   allAssets = DEFAULT_ASSETS,
   onClose,
   onSaved,
@@ -280,6 +333,7 @@ export function UniverseSettings({
   initialAssets: string[];
   initialBgm: { url: string; name: string; autoPlay?: boolean } | null | undefined;
   initialLayout: Record<string, { top: string; left: string }> | undefined;
+  initialAssetPositions?: Record<string, { top: string; left: string }>;
   allAssets?: UniverseAsset[];
   onClose: () => void;
   onSaved: (state: SettingsState) => void;
@@ -290,19 +344,40 @@ export function UniverseSettings({
     selectedAssets: initialAssets,
     bgm: initialBgm ? { url: initialBgm.url, name: initialBgm.name, autoPlay: initialBgm.autoPlay ?? false } : null,
     menuLayout: initialLayout ?? {},
+    assetPositions: initialAssetPositions ?? {},
   });
 
   const save = async () => {
     setSaving(true);
     try {
-      await updatePersonal(personalId, {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        universe: {
-          selectedAssets: state.selectedAssets,
-          bgm: state.bgm ?? undefined,
-          menuLayout: Object.keys(state.menuLayout).length > 0 ? state.menuLayout : undefined,
-        } as any,
-      });
+      /**
+       * Firestore updateDoc에서 { universe: {...} } 형태로 보내면
+       * universe 필드 전체가 교체되어 color/menus/favoriteNumber 등이 삭제됨.
+       * dot-notation("universe.xxx")으로 설정 관련 필드만 개별 업데이트.
+       */
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const update: Record<string, any> = {
+        "universe.selectedAssets": state.selectedAssets,
+      };
+
+      if (state.bgm) {
+        update["universe.bgm"] = {
+          url: state.bgm.url,
+          name: state.bgm.name,
+          autoPlay: state.bgm.autoPlay ?? false,
+        };
+      }
+
+      if (Object.keys(state.menuLayout).length > 0) {
+        update["universe.menuLayout"] = state.menuLayout;
+      }
+
+      if (Object.keys(state.assetPositions).length > 0) {
+        update["universe.assetPositions"] = state.assetPositions;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await updatePersonal(personalId, update as any);
       onSaved(state);
       onClose();
     } finally {
@@ -359,7 +434,11 @@ export function UniverseSettings({
             <LayoutTab
               menus={menus}
               layout={state.menuLayout}
-              onChange={(layout) => setState((p) => ({ ...p, menuLayout: layout }))}
+              onLayoutChange={(layout) => setState((p) => ({ ...p, menuLayout: layout }))}
+              selectedAssets={state.selectedAssets}
+              assetPositions={state.assetPositions}
+              onAssetPosChange={(pos) => setState((p) => ({ ...p, assetPositions: pos }))}
+              allAssets={allAssets}
             />
           )}
         </div>

@@ -92,8 +92,10 @@ export interface PersonalSchema {
       name: string;
       autoPlay?: boolean;
     };
-    /** 메뉴 노드 위치 커스텀 (key=menu.id, value=top/left %) */
+    /** 메뉴 노드 위치 커스텀 (key=menu.id) */
     menuLayout?: Record<string, { top: string; left: string }>;
+    /** 에셋 위치 커스텀 (key=asset.id) */
+    assetPositions?: Record<string, { top: string; left: string }>;
   };
 }
 
