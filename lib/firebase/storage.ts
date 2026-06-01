@@ -35,7 +35,7 @@ export async function deleteImage(url: string): Promise<void> {
 
 export async function uploadPersonalImage(
   personalId: string,
-  type: "photo" | "gallery",
+  type: "photo" | "gallery" | "diary",
   file: File
 ): Promise<string> {
   const ext = file.name.split(".").pop() || "jpg";

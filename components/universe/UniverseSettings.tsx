@@ -5,21 +5,23 @@ import { updatePersonal } from "@/lib/firebase/personals";
 import { uploadPersonalAudio } from "@/lib/firebase/storage";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
 import type { UniverseAsset } from "@/lib/types/asset";
+import type { UniverseIconType } from "@/lib/types/personal";
 import {
   X, Loader2, Check, Music, Layers, LayoutGrid,
-  Upload, Play, Pause, Trash2,
+  Upload, Play, Pause, Trash2, Volume2, Smile,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Tab = "assets" | "bgm" | "layout";
 
-interface MenuNode { id: string; label: string; }
+interface MenuNode { id: string; label: string; icon: UniverseIconType; customIcon?: string; }
 
-export interface BgmTrack { url: string; name: string; autoPlay?: boolean; }
+export interface BgmTrack { url: string; name: string; autoPlay?: boolean; volume?: number; }
 
 interface SettingsState {
   selectedAssets: string[];
   bgmList: BgmTrack[];
+  menus: MenuNode[];
   menuLayout: Record<string, { top: string; left: string }>;
   menuLayoutMobile: Record<string, { top: string; left: string }>;
   assetPositions: Record<string, { top: string; left: string }>;
@@ -39,12 +41,110 @@ const ICON_MAP: Record<string, string> = {
   profile: "👤", diary: "📖", gallery: "🖼", link: "🔗", music: "🎵", note: "📝",
 };
 
+/* ─── 메뉴 아이콘 에디터 ─────────────────────── */
+
+const EMOJI_PRESETS = [
+  "😊","😎","🤖","👾","🦊","🐱","🐶","🐼",
+  "🦋","🌸","🌟","⭐","💫","✨","🔥","🌈",
+  "🌙","☀️","🎵","🎨","📚","🎮","🏆","💎",
+  "🔮","🎯","🧩","🚀","🌌","💝","🌺","🍀",
+  "🦄","🔑","💡","🎁","🎈","📝","📸","🎬",
+  "🎤","🎹","🎸","☕","🌊","🏔️","🎭","🎪",
+];
+
+function MenuIconEditor({ menus, onChange }: {
+  menus: MenuNode[];
+  onChange: (updated: MenuNode[]) => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [customText, setCustomText] = useState("");
+
+  const editingMenu = menus.find((m) => m.id === editingId);
+
+  const apply = (emoji: string) => {
+    onChange(menus.map((m) => m.id === editingId ? { ...m, customIcon: emoji } : m));
+    setEditingId(null);
+  };
+
+  const reset = () => {
+    onChange(menus.map((m) => m.id === editingId ? { ...m, customIcon: undefined } : m));
+    setEditingId(null);
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-white/50">메뉴 아이콘을 원하는 이모지로 바꿀 수 있어요.</p>
+      <div className="grid grid-cols-3 gap-2">
+        {menus.map((menu) => (
+          <button key={menu.id} onClick={() => { setEditingId(menu.id); setCustomText(""); }}
+            className={cn(
+              "flex flex-col items-center gap-1.5 py-3 rounded-2xl border transition-all",
+              editingId === menu.id
+                ? "border-violet-400 bg-violet-500/20"
+                : "border-white/10 bg-white/5 hover:border-violet-400/40"
+            )}>
+            <span className="text-2xl leading-none">{menu.customIcon ?? ICON_MAP[menu.id] ?? "⭐"}</span>
+            <span className="text-[10px] text-white/50 truncate w-full text-center px-1">{menu.label}</span>
+            {menu.customIcon && (
+              <span className="text-[8px] text-violet-400/70">커스텀</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {editingId && editingMenu && (
+        <div className="rounded-2xl bg-white/5 border border-white/10 p-3 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-white/60 flex items-center gap-1.5">
+              <Smile size={12} /><span>"{editingMenu.label}" 아이콘</span>
+            </span>
+            <button onClick={() => setEditingId(null)} className="text-white/30 hover:text-white transition-colors">
+              <X size={14} />
+            </button>
+          </div>
+          {/* 프리셋 이모지 */}
+          <div className="grid grid-cols-8 gap-0.5">
+            {EMOJI_PRESETS.map((emoji) => (
+              <button key={emoji} onClick={() => apply(emoji)}
+                className="text-lg p-1.5 hover:bg-white/10 rounded-lg transition-colors leading-none">
+                {emoji}
+              </button>
+            ))}
+          </div>
+          {/* 직접 입력 */}
+          <div className="flex gap-2 pt-1">
+            <input
+              value={customText}
+              onChange={(e) => setCustomText(e.target.value)}
+              placeholder="이모지 직접 입력..."
+              maxLength={4}
+              className="flex-1 px-3 py-1.5 rounded-xl bg-white/8 border border-white/15 text-sm text-white placeholder-white/25 focus:border-violet-400 focus:outline-none"
+            />
+            <button onClick={() => customText.trim() && apply(customText.trim())}
+              disabled={!customText.trim()}
+              className="px-3 py-1.5 rounded-xl bg-violet-500 text-white text-xs font-semibold hover:bg-violet-600 disabled:opacity-40">
+              적용
+            </button>
+          </div>
+          {/* 기본 복원 */}
+          {editingMenu.customIcon && (
+            <button onClick={reset} className="text-[11px] text-white/25 hover:text-white/50 transition-colors">
+              기본 아이콘으로 복원
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── 레이아웃 드래그 탭 (모바일/데스크탑 분리) ── */
 
 type ViewMode = "desktop" | "mobile";
 
 function LayoutTab({
   menus,
+  onMenusChange,
   layout,
   layoutMobile,
   onLayoutChange,
@@ -57,6 +157,7 @@ function LayoutTab({
   allAssets,
 }: {
   menus: MenuNode[];
+  onMenusChange: (menus: MenuNode[]) => void;
   layout: Record<string, { top: string; left: string }>;
   layoutMobile: Record<string, { top: string; left: string }>;
   onLayoutChange: (v: Record<string, { top: string; left: string }>) => void;
@@ -107,7 +208,15 @@ function LayoutTab({
   const handlePointerUp = () => { draggingId.current = null; };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* 메뉴 아이콘 커스터마이징 */}
+      <div className="space-y-2">
+        <p className="text-xs text-white/35 uppercase tracking-wider font-semibold">메뉴 아이콘</p>
+        <MenuIconEditor menus={menus} onChange={onMenusChange} />
+      </div>
+
+      <div className="border-t border-white/10 pt-4 space-y-3">
+      <p className="text-xs text-white/35 uppercase tracking-wider font-semibold">위치 설정</p>
       {/* 모바일 / 데스크탑 토글 */}
       <div className="flex gap-1 p-1 bg-white/5 rounded-xl">
         {(["desktop", "mobile"] as ViewMode[]).map((m) => (
@@ -158,7 +267,7 @@ function LayoutTab({
               style={{ top: pos.top, left: pos.left }}>
               <div className="flex flex-col items-center gap-1">
                 <div className="w-9 h-9 rounded-full bg-violet-500/30 border border-violet-400/60 flex items-center justify-center text-sm">
-                  {ICON_MAP[menu.id] ?? "⭐"}
+                  {menu.customIcon ?? ICON_MAP[menu.id] ?? "⭐"}
                 </div>
                 <span className="text-[9px] text-white/70 whitespace-nowrap">{menu.label}</span>
               </div>
@@ -198,6 +307,7 @@ function LayoutTab({
           에셋 위치 초기화
         </button>
       </div>
+      </div>{/* /위치 설정 */}
     </div>
   );
 }
@@ -268,6 +378,11 @@ function BgmTab({
   const toggleAutoPlay = (idx: number) =>
     onChange(bgmList.map((t, i) => i === idx ? { ...t, autoPlay: !t.autoPlay } : t));
 
+  const setVolume = (idx: number, vol: number) => {
+    onChange(bgmList.map((t, i) => i === idx ? { ...t, volume: vol } : t));
+    if (previewIdx === idx && previewRef.current) previewRef.current.volume = vol;
+  };
+
   return (
     <div className="space-y-4">
       <p className="text-xs text-white/50">
@@ -294,6 +409,19 @@ function BgmTab({
                   className="p-1.5 text-white/30 hover:text-red-400 transition-colors shrink-0">
                   <Trash2 size={14} />
                 </button>
+              </div>
+              {/* 볼륨 슬라이더 */}
+              <div className="flex items-center gap-2">
+                <Volume2 size={12} className="text-white/30 shrink-0" />
+                <input
+                  type="range" min="0" max="100"
+                  value={Math.round((track.volume ?? 1) * 100)}
+                  onChange={(e) => setVolume(i, parseInt(e.target.value) / 100)}
+                  className="flex-1 h-1 accent-violet-400 cursor-pointer"
+                />
+                <span className="text-[10px] text-white/35 w-8 text-right tabular-nums">
+                  {Math.round((track.volume ?? 1) * 100)}%
+                </span>
               </div>
               {/* 자동재생 토글 (첫 번째 트랙에만) */}
               {i === 0 && (
@@ -334,35 +462,65 @@ function BgmTab({
 function AssetsTab({
   selected,
   allAssets,
+  profilePhotoUrl,
   onChange,
 }: {
   selected: string[];
   allAssets: UniverseAsset[];
+  profilePhotoUrl?: string;
   onChange: (ids: string[]) => void;
 }) {
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
 
+  const photoActive = selected.includes("profile-photo");
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <p className="text-xs text-white/50">우주에 띄울 에셋을 선택하세요. 여러 개 조합 가능해요.</p>
-      <div className="grid grid-cols-4 gap-2">
-        {allAssets.filter((a) => a.isFree).map((asset) => {
-          const active = selected.includes(asset.id);
-          return (
-            <button key={asset.id} onClick={() => toggle(asset.id)}
-              className={cn(
-                "flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 transition-all",
-                active
-                  ? "border-violet-400 bg-violet-500/20 scale-105"
-                  : "border-white/10 bg-white/5 hover:border-violet-400/40"
-              )}>
-              <span className="text-2xl">{asset.emoji}</span>
-              <span className="text-[10px] text-white/60">{asset.name}</span>
-              {active && <Check size={10} className="text-violet-400" />}
-            </button>
-          );
-        })}
+
+      {/* 프로필 사진 에셋 */}
+      {profilePhotoUrl && (
+        <div>
+          <p className="text-[10px] text-white/35 uppercase tracking-wider mb-2 font-semibold">나만의 에셋</p>
+          <button onClick={() => toggle("profile-photo")}
+            className={cn(
+              "flex items-center gap-3 w-full px-4 py-3 rounded-2xl border-2 transition-all text-left",
+              photoActive
+                ? "border-violet-400 bg-violet-500/20"
+                : "border-white/10 bg-white/5 hover:border-violet-400/40"
+            )}>
+            <img src={profilePhotoUrl} alt="프로필" className="w-10 h-10 rounded-full object-cover border-2 border-white/20 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-white">프로필 사진</p>
+              <p className="text-[10px] text-white/40">우주 어딘가에 내 사진을 띄워요</p>
+            </div>
+            {photoActive && <Check size={14} className="text-violet-400 shrink-0" />}
+          </button>
+        </div>
+      )}
+
+      {/* 기본 에셋 */}
+      <div>
+        {profilePhotoUrl && <p className="text-[10px] text-white/35 uppercase tracking-wider mb-2 font-semibold">기본 에셋</p>}
+        <div className="grid grid-cols-4 gap-2">
+          {allAssets.filter((a) => a.isFree && a.id !== "profile-photo").map((asset) => {
+            const active = selected.includes(asset.id);
+            return (
+              <button key={asset.id} onClick={() => toggle(asset.id)}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 transition-all",
+                  active
+                    ? "border-violet-400 bg-violet-500/20 scale-105"
+                    : "border-white/10 bg-white/5 hover:border-violet-400/40"
+                )}>
+                <span className="text-2xl">{asset.emoji}</span>
+                <span className="text-[10px] text-white/60">{asset.name}</span>
+                {active && <Check size={10} className="text-violet-400" />}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -372,7 +530,7 @@ function AssetsTab({
 
 export function UniverseSettings({
   personalId,
-  menus,
+  menus: initialMenus,
   initialAssets,
   initialBgmList,
   initialLayout,
@@ -380,6 +538,7 @@ export function UniverseSettings({
   initialAssetPositions,
   initialAssetPositionsMobile,
   allAssets = DEFAULT_ASSETS,
+  profilePhotoUrl,
   bgmPlaying,
   onToggleBgm,
   onClose,
@@ -394,6 +553,7 @@ export function UniverseSettings({
   initialAssetPositions?: Record<string, { top: string; left: string }>;
   initialAssetPositionsMobile?: Record<string, { top: string; left: string }>;
   allAssets?: UniverseAsset[];
+  profilePhotoUrl?: string;
   bgmPlaying: boolean;
   onToggleBgm: () => void;
   onClose: () => void;
@@ -404,6 +564,7 @@ export function UniverseSettings({
   const [state, setState] = useState<SettingsState>({
     selectedAssets: initialAssets,
     bgmList: initialBgmList,
+    menus: initialMenus,
     menuLayout:           initialLayout               ?? {},
     menuLayoutMobile:     initialLayoutMobile         ?? {},
     assetPositions:       initialAssetPositions       ?? {},
@@ -422,6 +583,7 @@ export function UniverseSettings({
       const update: Record<string, any> = {
         "universe.selectedAssets": state.selectedAssets,
         "universe.bgmList": state.bgmList,
+        "universe.menus": state.menus,
       };
 
       if (Object.keys(state.menuLayout).length > 0)
@@ -477,6 +639,7 @@ export function UniverseSettings({
             <AssetsTab
               selected={state.selectedAssets}
               allAssets={allAssets}
+              profilePhotoUrl={profilePhotoUrl}
               onChange={(ids) => setState((p) => ({ ...p, selectedAssets: ids }))}
             />
           )}
@@ -489,7 +652,8 @@ export function UniverseSettings({
           )}
           {tab === "layout" && (
             <LayoutTab
-              menus={menus}
+              menus={state.menus}
+              onMenusChange={(menus) => setState((p) => ({ ...p, menus }))}
               layout={state.menuLayout}
               layoutMobile={state.menuLayoutMobile}
               onLayoutChange={(v) => setState((p) => ({ ...p, menuLayout: v }))}

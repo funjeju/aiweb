@@ -12,6 +12,17 @@ export interface UniverseAsset {
   createdAt?: string;
 }
 
+/** 프로필 사진 특수 에셋 — 이미지 URL로 렌더링됨 */
+export const PROFILE_PHOTO_ASSET: UniverseAsset = {
+  id: "profile-photo",
+  name: "프로필 사진",
+  emoji: "🖼️",
+  category: "character",
+  animationType: "float",
+  isFree: true,
+  isDefault: true,
+};
+
 /** 기본 무료 에셋 (코드 내장) */
 export const DEFAULT_ASSETS: UniverseAsset[] = [
   { id: "astronaut", name: "우주인",   emoji: "👨‍🚀", category: "character", animationType: "float",  isFree: true, isDefault: true },

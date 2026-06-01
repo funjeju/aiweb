@@ -44,6 +44,7 @@ export interface DiaryEntry {
   emotion?: DiaryEmotion;  // AI 분류 감정
   isPublic: boolean;       // 항목별 공개 여부
   createdAt: string;       // ISO
+  photos?: string[];       // 첨부 사진 URL 목록 (최대 3장)
 }
 
 export type SkyTheme = "deep-space" | "purple-galaxy" | "jeju" | "vintage";

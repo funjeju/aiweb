@@ -11,6 +11,8 @@ import { generateConstellation, generateConstellationFromSeed } from "@/lib/univ
 import { getStarLore } from "@/lib/universe/star-lore";
 import type { ConstellationStar } from "@/lib/universe/stars";
 import { getPublishedUniverses, updatePersonal, getPersonalById } from "@/lib/firebase/personals";
+import { getStarComments, addStarComment, deleteStarComment } from "@/lib/firebase/starComments";
+import type { StarComment } from "@/lib/firebase/starComments";
 import { uploadPersonalImage } from "@/lib/firebase/storage";
 import { useAuthStore } from "@/lib/store/authStore";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
@@ -24,7 +26,7 @@ import {
   Github, Instagram, Linkedin, Globe, Mail,
   ChevronLeft, ChevronRight, Pencil, Plus, Check, Settings,
   Play, Pause, LogIn, Send, Lock, MessageCircle, PenLine, Trash2,
-  Calendar, Search,
+  Calendar, Search, Volume2,
 } from "lucide-react";
 import type { DiaryEntry, DiaryEmotion } from "@/lib/types/personal";
 import { cn } from "@/lib/utils";
@@ -33,7 +35,7 @@ import { cn } from "@/lib/utils";
 
 export interface UniverseMenu { id: string; label: string; icon: UniverseIconType; customIcon?: string; }
 
-export interface BgmTrack { url: string; name: string; autoPlay?: boolean; }
+export interface BgmTrack { url: string; name: string; autoPlay?: boolean; volume?: number; }
 
 export interface UniverseData {
   name: string;
@@ -483,6 +485,7 @@ function DiaryPanel({ data, isOwner, onSaved }: {
         mode={mode}
         setMode={setMode}
         sitePublic={sitePublic}
+        personalId={data.personalId}
         onCancel={() => setView("list")}
         onSave={async (entry) => {
           await saveToDb([entry, ...entries]);
@@ -566,6 +569,15 @@ function DiaryPanel({ data, isOwner, onSaved }: {
                       )}
                     </div>
                     <p className="text-white/75 text-sm leading-relaxed">{truncate(featured.content, FEATURED_LIMIT)}</p>
+                    {featured.photos && featured.photos.length > 0 && (
+                      <div className={cn("grid gap-1.5 mt-2", featured.photos.length === 1 ? "grid-cols-1" : featured.photos.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
+                        {featured.photos.map((url) => (
+                          <div key={url} className="relative aspect-square rounded-lg overflow-hidden">
+                            <Image src={url} alt="" fill className="object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {long && (
                       <button onClick={() => setModalEntries([featured])} className="mt-1.5 text-xs font-semibold" style={{ color: data.color }}>
                         더보기
@@ -697,6 +709,15 @@ function DiaryDetailModal({ entries, isOwner, color, onClose, onDelete }: {
                   )}
                 </div>
                 <p className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">{e.content}</p>
+                {e.photos && e.photos.length > 0 && (
+                  <div className={cn("grid gap-2 mt-3", e.photos.length === 1 ? "grid-cols-1" : e.photos.length === 2 ? "grid-cols-2" : "grid-cols-3")}>
+                    {e.photos.map((url) => (
+                      <div key={url} className="relative aspect-square rounded-xl overflow-hidden">
+                        <Image src={url} alt="" fill className="object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -708,10 +729,11 @@ function DiaryDetailModal({ entries, isOwner, color, onClose, onDelete }: {
 
 /* ─── 다이어리 작성기 (일기형 / 대화형) ───────── */
 
-function DiaryWriter({ mode, setMode, sitePublic, onCancel, onSave }: {
+function DiaryWriter({ mode, setMode, sitePublic, personalId, onCancel, onSave }: {
   mode: WriteMode;
   setMode: (m: WriteMode) => void;
   sitePublic: boolean;
+  personalId?: string;
   onCancel: () => void;
   onSave: (entry: DiaryEntry) => Promise<void>;
 }) {
@@ -723,7 +745,22 @@ function DiaryWriter({ mode, setMode, sitePublic, onCancel, onSave }: {
   const [aiThinking, setAiThinking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !personalId) return;
+    if (photos.length >= 3) return;
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadPersonalImage(personalId, "diary", file);
+      setPhotos((p) => [...p, url]);
+    } catch { alert("사진 업로드에 실패했습니다."); }
+    finally { setUploadingPhoto(false); e.target.value = ""; }
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -768,6 +805,7 @@ function DiaryWriter({ mode, setMode, sitePublic, onCancel, onSave }: {
         emotion: data.emotion,
         isPublic: sitePublic ? isPublic : false,
         createdAt: new Date().toISOString(),
+        ...(photos.length > 0 && { photos }),
       };
       await onSave(entry);
     } finally { setSaving(false); }
@@ -827,6 +865,35 @@ function DiaryWriter({ mode, setMode, sitePublic, onCancel, onSave }: {
         </div>
       )}
 
+      {/* 사진 첨부 (최대 3장) */}
+      {personalId && (
+        <div className="mt-3 shrink-0 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <ImageIcon size={11} className="text-white/40" />
+            <span className="text-xs text-white/40">사진 첨부</span>
+            <span className="text-[10px] text-white/25">{photos.length}/3</span>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {photos.map((url, i) => (
+              <div key={url} className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0">
+                <Image src={url} alt="" width={64} height={64} className="w-full h-full object-cover" />
+                <button onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))}
+                  className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center hover:bg-red-500/80 transition-colors">
+                  <X size={9} className="text-white" />
+                </button>
+              </div>
+            ))}
+            {photos.length < 3 && (
+              <button onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto}
+                className="w-16 h-16 rounded-xl border border-dashed border-white/20 flex items-center justify-center text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors shrink-0">
+                {uploadingPhoto ? <Loader2 size={15} className="animate-spin text-violet-400" /> : <Plus size={15} />}
+              </button>
+            )}
+          </div>
+          <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+        </div>
+      )}
+
       {/* 공개/비공개 + 저장 */}
       <div className="mt-3 pt-3 border-t border-white/10 shrink-0 space-y-2.5">
         <label className={cn("flex items-center gap-2", sitePublic ? "cursor-pointer" : "opacity-40 cursor-not-allowed")}>
@@ -879,6 +946,109 @@ function MenuContent({ menu, data, isOwner, onDataUpdate }: {
     case "note":    return <p className="text-white/50 text-sm py-4 text-center">메모 공간은 곧 추가됩니다.</p>;
     default: return null;
   }
+}
+
+/* ─── 별 방명록 ─────────────────────────────────── */
+
+function StarComments({ starName, currentUser }: {
+  starName: string;
+  currentUser: { uid: string; displayName?: string | null; email?: string | null } | null;
+}) {
+  const [comments, setComments] = useState<StarComment[] | null>(null);
+  const [text, setText] = useState("");
+  const [posting, setPosting] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setComments(null);
+    getStarComments(starName).then((c) => { if (!cancelled) setComments(c); }).catch(() => setComments([]));
+    return () => { cancelled = true; };
+  }, [starName]);
+
+  const post = async () => {
+    if (!currentUser || !text.trim() || posting) return;
+    const authorName = currentUser.displayName || currentUser.email?.split("@")[0] || "익명";
+    const payload = { authorId: currentUser.uid, authorName, text: text.trim() };
+    setPosting(true);
+    try {
+      const id = await addStarComment(starName, payload);
+      const newC: StarComment = { id, ...payload, createdAt: new Date().toISOString() };
+      setComments((prev) => [...(prev ?? []), newC]);
+      setText("");
+    } catch { /* 무시 */ }
+    finally { setPosting(false); }
+  };
+
+  const remove = async (commentId: string, authorId: string) => {
+    if (!currentUser || currentUser.uid !== authorId) return;
+    await deleteStarComment(starName, commentId).catch(() => {});
+    setComments((prev) => prev?.filter((c) => c.id !== commentId) ?? null);
+  };
+
+  return (
+    <div className="mt-5 pt-4 border-t border-white/10">
+      <p className="text-[11px] text-white/35 mb-3 flex items-center gap-1.5">
+        <MessageCircle size={11} />이 별을 공유하는 사람들의 이야기
+        {comments !== null && <span>({comments.length})</span>}
+      </p>
+
+      {/* 댓글 목록 */}
+      <div className="space-y-2.5 max-h-44 overflow-y-auto mb-3 pr-1">
+        {comments === null && (
+          <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-white/25" /></div>
+        )}
+        {comments?.length === 0 && (
+          <p className="text-xs text-white/25 text-center py-3">첫 번째 이야기를 남겨보세요 ✨</p>
+        )}
+        {comments?.map((c) => (
+          <div key={c.id} className="flex items-start gap-2 group">
+            <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-[10px] font-bold text-white/60 mt-0.5">
+              {c.authorName[0]}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="text-[10px] text-white/40 font-medium">{c.authorName}</span>
+                <span className="text-[9px] text-white/20">
+                  {new Date(c.createdAt).toLocaleDateString("ko", { month: "short", day: "numeric" })}
+                </span>
+              </div>
+              <p className="text-xs text-white/75 leading-relaxed break-words">{c.text}</p>
+            </div>
+            {currentUser?.uid === c.authorId && (
+              <button onClick={() => remove(c.id, c.authorId)}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-white/20 hover:text-red-400 shrink-0">
+                <Trash2 size={10} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* 입력 */}
+      {currentUser ? (
+        <div className="flex gap-2">
+          <input
+            ref={inputRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && post()}
+            placeholder="이 별에 메시지를 남겨보세요..."
+            maxLength={120}
+            className="flex-1 px-3 py-2 rounded-full bg-white/8 border border-white/15 text-xs text-white placeholder-white/25 focus:border-violet-400 focus:outline-none"
+          />
+          <button onClick={post} disabled={posting || !text.trim()}
+            className="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center hover:bg-violet-600 disabled:opacity-40 transition-colors shrink-0">
+            {posting ? <Loader2 size={12} className="animate-spin text-white" /> : <Send size={12} className="text-white" />}
+          </button>
+        </div>
+      ) : (
+        <p className="text-[11px] text-white/30 text-center">
+          <a href="/login" className="text-violet-400 hover:text-violet-300 underline underline-offset-2">로그인</a>하면 이야기를 남길 수 있어요
+        </p>
+      )}
+    </div>
+  );
 }
 
 /* ─── 로그인 유도 모달 ─────────────────────────── */
@@ -967,7 +1137,7 @@ function NeighborModal({ onClose, fromId }: { onClose: () => void; fromId?: stri
 
 /* ─── BGM 플레이어 버튼 (다중 트랙) ─────────────── */
 
-function BgmPlayerButton({ tracks, trackIdx, color, playing, onToggle, onPrev, onNext }: {
+function BgmPlayerButton({ tracks, trackIdx, color, playing, onToggle, onPrev, onNext, onVolumeChange }: {
   tracks: BgmTrack[];
   trackIdx: number;
   color: string;
@@ -975,26 +1145,49 @@ function BgmPlayerButton({ tracks, trackIdx, color, playing, onToggle, onPrev, o
   onToggle: () => void;
   onPrev: () => void;
   onNext: () => void;
+  onVolumeChange: (vol: number) => void;
 }) {
+  const [showVol, setShowVol] = useState(false);
   const track = tracks[trackIdx];
   if (!track) return null;
+  const vol = track.volume ?? 1;
   return (
-    <div className="flex items-center gap-1 px-2 py-1.5 rounded-full backdrop-blur-sm border text-white/70 text-xs"
-      style={{ backgroundColor: `${color}15`, borderColor: `${color}40` }}>
-      {tracks.length > 1 && (
-        <button onClick={onPrev} className="p-0.5 hover:text-white transition-colors" title="이전 트랙">
-          <ChevronLeft size={12} />
-        </button>
+    <div className="relative">
+      {showVol && (
+        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-3 py-2 rounded-2xl bg-black/80 border border-white/15 backdrop-blur-sm flex items-center gap-2 whitespace-nowrap">
+          <Volume2 size={11} className="text-white/40 shrink-0" />
+          <input
+            type="range" min="0" max="100"
+            value={Math.round(vol * 100)}
+            onChange={(e) => onVolumeChange(parseInt(e.target.value) / 100)}
+            className="w-24 accent-violet-400 cursor-pointer"
+            style={{ height: "4px" }}
+          />
+          <span className="text-[10px] text-white/40 w-7 text-right tabular-nums">{Math.round(vol * 100)}%</span>
+        </div>
       )}
-      <button onClick={onToggle} className="p-0.5 hover:text-white transition-colors" title={track.name}>
-        {playing ? <Pause size={13} /> : <Play size={13} />}
-      </button>
-      <span className="max-w-[90px] truncate mx-1">{track.name}</span>
-      {tracks.length > 1 && (
-        <button onClick={onNext} className="p-0.5 hover:text-white transition-colors" title="다음 트랙">
-          <ChevronRight size={12} />
+      <div className="flex items-center gap-1 px-2 py-1.5 rounded-full backdrop-blur-sm border text-white/70 text-xs"
+        style={{ backgroundColor: `${color}15`, borderColor: `${color}40` }}>
+        {tracks.length > 1 && (
+          <button onClick={onPrev} className="p-0.5 hover:text-white transition-colors" title="이전 트랙">
+            <ChevronLeft size={12} />
+          </button>
+        )}
+        <button onClick={onToggle} className="p-0.5 hover:text-white transition-colors" title={track.name}>
+          {playing ? <Pause size={13} /> : <Play size={13} />}
         </button>
-      )}
+        <span className="max-w-[90px] truncate mx-1">{track.name}</span>
+        {tracks.length > 1 && (
+          <button onClick={onNext} className="p-0.5 hover:text-white transition-colors" title="다음 트랙">
+            <ChevronRight size={12} />
+          </button>
+        )}
+        <button onClick={() => setShowVol((v) => !v)}
+          className={cn("p-0.5 transition-colors", showVol ? "text-violet-400" : "hover:text-white")}
+          title="볼륨">
+          <Volume2 size={12} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -1075,6 +1268,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
     if (!audioRef.current) {
       const audio = new Audio(currentTrack.url);
       audio.loop = true;
+      audio.volume = currentTrack.volume ?? 1;
       audioRef.current = audio;
     }
     if (currentTrack.autoPlay) {
@@ -1083,6 +1277,11 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
     return () => { audioRef.current?.pause(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrack?.url, currentTrack?.autoPlay]);
+
+  // 볼륨 설정 변경 즉시 반영
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = currentTrack?.volume ?? 1;
+  }, [currentTrack?.volume]);
 
   const toggleBgm = () => {
     const audio = audioRef.current;
@@ -1181,6 +1380,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   const handleSettingsSaved = (state: {
     selectedAssets: string[];
     bgmList: BgmTrack[];
+    menus: UniverseMenu[];
     menuLayout: Record<string, { top: string; left: string }>;
     menuLayoutMobile: Record<string, { top: string; left: string }>;
     assetPositions: Record<string, { top: string; left: string }>;
@@ -1190,6 +1390,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       ...prev,
       selectedAssets: state.selectedAssets,
       bgmList: state.bgmList,
+      menus: state.menus,
       menuLayout:         Object.keys(state.menuLayout).length         > 0 ? state.menuLayout         : undefined,
       menuLayoutMobile:   Object.keys(state.menuLayoutMobile).length   > 0 ? state.menuLayoutMobile   : undefined,
       assetPositions:     Object.keys(state.assetPositions).length     > 0 ? state.assetPositions     : undefined,
@@ -1224,6 +1425,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           selectedIds={data.selectedAssets}
           seed={constellation.seed}
           customPositions={activeAssetPositions}
+          profilePhotoUrl={data.photo}
         />
       )}
 
@@ -1303,6 +1505,13 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
             onToggle={toggleBgm}
             onPrev={prevTrack}
             onNext={nextTrack}
+            onVolumeChange={(vol) => {
+              if (audioRef.current) audioRef.current.volume = vol;
+              setData((prev) => ({
+                ...prev,
+                bgmList: (prev.bgmList ?? []).map((t, i) => i === trackIdx ? { ...t, volume: vol } : t),
+              }));
+            }}
           />
         )}
         <button className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold text-white backdrop-blur-sm border"
@@ -1367,7 +1576,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         return (
           <div className="absolute inset-0 z-30 flex items-end sm:items-center justify-center"
             onClick={() => setClickedStar(null)}>
-            <div className="w-full sm:max-w-sm mx-auto bg-black/50 backdrop-blur-xl border border-white/10 rounded-t-3xl sm:rounded-3xl p-7 m-0 sm:m-4"
+            <div className="w-full sm:max-w-sm mx-auto bg-black/50 backdrop-blur-xl border border-white/10 rounded-t-3xl sm:rounded-3xl p-7 m-0 sm:m-4 max-h-[80vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}>
               {/* 별 아이콘 + 밝기 */}
               <div className="flex items-center gap-3 mb-4">
@@ -1384,6 +1593,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
                 </button>
               </div>
               <p className="text-white/70 text-sm leading-relaxed">{lore.desc}</p>
+              <StarComments starName={clickedStar.star.name} currentUser={user} />
             </div>
           </div>
         );
@@ -1401,6 +1611,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           initialAssetPositions={data.assetPositions}
           initialAssetPositionsMobile={data.assetPositionsMobile}
           allAssets={DEFAULT_ASSETS}
+          profilePhotoUrl={data.photo}
           bgmPlaying={bgmPlaying}
           onToggleBgm={toggleBgm}
           onClose={() => setShowSettings(false)}

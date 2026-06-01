@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Image from "next/image";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
 import type { UniverseAsset } from "@/lib/types/asset";
 
@@ -28,11 +29,13 @@ export function FloatingAssets({
   seed,
   allAssets = DEFAULT_ASSETS,
   customPositions = {},
+  profilePhotoUrl,
 }: {
   selectedIds: string[];
   seed: number;
   allAssets?: UniverseAsset[];
   customPositions?: Record<string, { top: string; left: string }>;
+  profilePhotoUrl?: string;
 }) {
   const placed = useMemo<PlacedAsset[]>(() => {
     const rng = seededRandom(seed ^ 0xdeadbeef);
@@ -76,23 +79,40 @@ export function FloatingAssets({
       `}</style>
 
       <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden">
-        {placed.map((p, i) => (
-          <div
-            key={`${p.asset.id}-${i}`}
-            className="absolute select-none"
-            style={{
-              top: p.top,
-              left: p.left,
-              fontSize: p.size,
-              "--ua-amp": `${p.amplitude}px`,
-              animation: `ua-${p.asset.animationType} ${p.duration.toFixed(1)}s ease-in-out ${p.delay.toFixed(1)}s infinite`,
-              filter: "drop-shadow(0 0 8px rgba(255,255,255,0.2))",
-              opacity: 0.85,
-            } as React.CSSProperties}
-          >
-            {p.asset.emoji}
-          </div>
-        ))}
+        {placed.map((p, i) => {
+          const isPhoto = p.asset.id === "profile-photo";
+          const photoSize = p.size + 20;
+          return (
+            <div
+              key={`${p.asset.id}-${i}`}
+              className="absolute select-none"
+              style={{
+                top: p.top,
+                left: p.left,
+                fontSize: isPhoto ? undefined : p.size,
+                "--ua-amp": `${p.amplitude}px`,
+                animation: `ua-${p.asset.animationType} ${p.duration.toFixed(1)}s ease-in-out ${p.delay.toFixed(1)}s infinite`,
+                filter: isPhoto
+                  ? "drop-shadow(0 0 12px rgba(255,255,255,0.35))"
+                  : "drop-shadow(0 0 8px rgba(255,255,255,0.2))",
+                opacity: 0.9,
+              } as React.CSSProperties}
+            >
+              {isPhoto && profilePhotoUrl ? (
+                <Image
+                  src={profilePhotoUrl}
+                  alt="프로필"
+                  width={photoSize}
+                  height={photoSize}
+                  className="rounded-full object-cover border-2 border-white/40"
+                  style={{ width: photoSize, height: photoSize }}
+                />
+              ) : (
+                p.asset.emoji
+              )}
+            </div>
+          );
+        })}
       </div>
     </>
   );
