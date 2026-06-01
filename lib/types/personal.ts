@@ -25,6 +25,11 @@ export type PersonalSection = "hero" | "about" | "skills" | "projects" | "contac
 
 export type UniverseIconType = "profile" | "diary" | "gallery" | "link" | "music" | "note";
 
+export interface GalleryItem {
+  url: string;
+  caption?: string; // AI 생성 감성 캡션
+}
+
 export type SkyTheme = "deep-space" | "purple-galaxy" | "jeju" | "vintage";
 export type LineStyle = "flow" | "dotted" | "aurora";
 export type StarGlow = "default" | "soft" | "intense";
@@ -78,7 +83,9 @@ export interface PersonalSchema {
     favoriteNumber: number;
     menus: Array<{ id: string; label: string; icon: UniverseIconType }>;
     style?: UniverseStyle;
-    galleryImages?: string[]; // Firebase Storage URL 목록
+    galleryImages?: string[];  // 레거시 (마이그레이션 완료 후 제거 예정)
+    galleryItems?: GalleryItem[]; // AI 캡션 포함 갤러리
+    selectedAssets?: string[]; // 활성화된 에셋 ID 목록
   };
 }
 

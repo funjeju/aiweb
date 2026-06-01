@@ -6,7 +6,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { getPersonalById, updatePersonal } from "@/lib/firebase/personals";
 import { uploadPersonalImage, deletePersonalImage } from "@/lib/firebase/storage";
+import { getAllAssets } from "@/lib/firebase/assets";
 import { SECTION_LABEL } from "@/lib/types/personal";
+import type { UniverseAsset } from "@/lib/types/asset";
+import { DEFAULT_ASSETS } from "@/lib/types/asset";
 import type {
   PersonalSchema, PersonalSection, PersonalProject,
   SkyTheme, LineStyle, StarGlow, UniverseIconType,
@@ -92,6 +95,10 @@ export default function PrivateEditPage() {
   const [galleryUploading, setGalleryUploading] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
+  // 에셋
+  const [allAssets, setAllAssets] = useState<UniverseAsset[]>(DEFAULT_ASSETS);
+  const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
+
   // 슬러그/공개 주소
   const [publicSlug, setPublicSlug] = useState("");
   const [publicUrl, setPublicUrl] = useState("");
@@ -120,7 +127,10 @@ export default function PrivateEditPage() {
       setPhoto(p.profile.photo);
       setPublicSlug(p.publicSlug ?? "");
       setPublicUrl(p.publicUrl ?? "");
+      // 에셋 로드
+      getAllAssets().then(setAllAssets).catch(() => {});
       if (p.universe) {
+        setSelectedAssets(p.universe.selectedAssets ?? []);
         setIsUniverse(true);
         setSkyTheme(p.universe.style?.skyTheme ?? "deep-space");
         setLineStyle(p.universe.style?.lineStyle ?? "flow");
@@ -257,6 +267,7 @@ export default function PrivateEditPage() {
           menus: universeMenus,
           style: { skyTheme, lineStyle, starGlow },
           galleryImages,
+          selectedAssets,
         },
       } : {};
 
@@ -446,6 +457,35 @@ export default function PrivateEditPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* 우주 에셋 선택 */}
+            <div>
+              <p className="text-xs font-semibold text-gray-600 mb-2">
+                우주 에셋 <span className="text-gray-400 font-normal">({selectedAssets.length}개 활성)</span>
+              </p>
+              <div className="grid grid-cols-5 gap-1.5">
+                {allAssets.filter((a) => a.isFree).map((asset) => {
+                  const active = selectedAssets.includes(asset.id);
+                  return (
+                    <button
+                      key={asset.id}
+                      onClick={() => setSelectedAssets((prev) =>
+                        active ? prev.filter((id) => id !== asset.id) : [...prev, asset.id]
+                      )}
+                      title={asset.name}
+                      className={cn(
+                        "flex flex-col items-center gap-1 py-2 rounded-xl border-2 transition-all",
+                        active ? "border-violet-400 bg-violet-50 scale-105" : "border-gray-200 bg-white/60 hover:border-violet-200"
+                      )}
+                    >
+                      <span className="text-xl leading-none">{asset.emoji}</span>
+                      <span className="text-[9px] text-gray-500 font-medium">{asset.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1.5">클릭해서 우주에 띄울 에셋 선택</p>
             </div>
 
             {/* 메뉴 모듈 관리 */}

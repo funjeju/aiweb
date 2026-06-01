@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSitesByOwner, deleteSite } from "@/lib/firebase/sites";
@@ -20,6 +20,18 @@ import { cn } from "@/lib/utils";
 type Tab = "business" | "personal";
 
 export default function DashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Sparkles className="w-6 h-6 text-indigo-400 animate-pulse" />
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardContent() {
   const { user, profile, loading: authLoading } = useAuthStore();
   const router = useRouter();
   const searchParams = useSearchParams();

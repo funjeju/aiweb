@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { cache } from "react";
+import { cache, Suspense } from "react";
 import type { Metadata } from "next";
 import { adminDb } from "@/lib/firebase/admin";
 import { getPersonalById } from "@/lib/firebase/personals";
@@ -48,20 +48,31 @@ export default async function PersonalPage({ params }: Props) {
 
   // 별자리 우주 모드면 우주 홈으로 렌더 (개인 웹 메인 컨셉)
   if (p.universe) {
+    // legacyImages → GalleryItem 변환 (마이그레이션)
+    const galleryItems = p.universe.galleryItems
+      ?? (p.universe.galleryImages ?? []).map((url) => ({ url }));
+
+    const universeData = {
+      name: p.profile.name,
+      color: p.universe.color,
+      favoriteNumber: p.universe.favoriteNumber,
+      menus: p.universe.menus,
+      about: p.about || p.profile.bio,
+      style: p.universe.style,
+      photo: p.profile.photo,
+      tagline: p.profile.tagline,
+      role: p.profile.role,
+      socials: p.profile.socials,
+      galleryItems,
+      ownerId: p.ownerId,
+      personalId: p.id,
+      selectedAssets: p.universe.selectedAssets,
+    };
+
     return (
-      <UniverseHome data={{
-        name: p.profile.name,
-        color: p.universe.color,
-        favoriteNumber: p.universe.favoriteNumber,
-        menus: p.universe.menus,
-        about: p.about || p.profile.bio,
-        style: p.universe.style,
-        photo: p.profile.photo,
-        tagline: p.profile.tagline,
-        role: p.profile.role,
-        socials: p.profile.socials,
-        galleryImages: p.universe.galleryImages,
-      }} />
+      <Suspense fallback={<div className="w-full h-screen bg-[#05060f]" />}>
+        <UniverseHome data={universeData} />
+      </Suspense>
     );
   }
 

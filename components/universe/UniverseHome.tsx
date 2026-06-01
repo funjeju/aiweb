@@ -1,24 +1,27 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { StarfieldCanvas } from "./StarfieldCanvas";
 import { ConstellationPreview } from "./ConstellationPreview";
 import { generateConstellation } from "@/lib/universe/stars";
-import { getPublishedUniverses } from "@/lib/firebase/personals";
-import type { PersonalSchema, UniverseIconType, UniverseStyle } from "@/lib/types/personal";
+import { getPublishedUniverses, updatePersonal } from "@/lib/firebase/personals";
+import { uploadPersonalImage } from "@/lib/firebase/storage";
+import { useAuthStore } from "@/lib/store/authStore";
+import type { PersonalSchema, UniverseIconType, UniverseStyle, GalleryItem } from "@/lib/types/personal";
 import {
   User, BookOpen, Image as ImageIcon, Sparkles, X,
   Link2, Music, FileText, ArrowRight, Loader2,
   Github, Instagram, Linkedin, Globe, Mail,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Pencil, Plus, Check,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { FloatingAssets } from "./FloatingAssets";
 
-export interface UniverseMenu {
-  id: string;
-  label: string;
-  icon: UniverseIconType;
-}
+/* ─── 타입 ────────────────────────────────────── */
+
+export interface UniverseMenu { id: string; label: string; icon: UniverseIconType; }
 
 export interface UniverseData {
   name: string;
@@ -27,176 +30,276 @@ export interface UniverseData {
   menus: UniverseMenu[];
   about?: string;
   style?: UniverseStyle;
-  // 내 소개 패널용
   photo?: string;
   tagline?: string;
   role?: string;
-  socials?: {
-    github?: string;
-    instagram?: string;
-    linkedin?: string;
-    twitter?: string;
-    website?: string;
-    email?: string;
-  };
-  // 갤러리 패널용
-  galleryImages?: string[];
+  socials?: { github?: string; instagram?: string; linkedin?: string; twitter?: string; website?: string; email?: string; };
+  galleryItems?: GalleryItem[];
+  selectedAssets?: string[];
+  // 오너 감지 + 저장용
+  ownerId?: string;
+  personalId?: string;
 }
 
 const ICON: Record<UniverseIconType, React.ReactNode> = {
-  profile: <User size={20} />,
-  diary:   <BookOpen size={20} />,
-  gallery: <ImageIcon size={20} />,
-  link:    <Link2 size={20} />,
-  music:   <Music size={20} />,
-  note:    <FileText size={20} />,
+  profile: <User size={20} />, diary: <BookOpen size={20} />, gallery: <ImageIcon size={20} />,
+  link: <Link2 size={20} />, music: <Music size={20} />, note: <FileText size={20} />,
 };
 
 const MENU_POS = [
-  { top: "18%", left: "50%" },
-  { top: "50%", left: "16%" },
-  { top: "50%", left: "84%" },
-  { top: "82%", left: "50%" },
-  { top: "26%", left: "22%" },
-  { top: "26%", left: "78%" },
+  { top: "18%", left: "50%" }, { top: "50%", left: "16%" }, { top: "50%", left: "84%" },
+  { top: "82%", left: "50%" }, { top: "26%", left: "22%" }, { top: "26%", left: "78%" },
 ];
 
-/* ── 내 소개 패널 ──────────────────────────────── */
-function ProfilePanel({ data }: { data: UniverseData }) {
+/* ─── 내 소개 패널 ─────────────────────────────── */
+
+function ProfilePanel({ data, isOwner }: { data: UniverseData; isOwner: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    role: data.role ?? "",
+    tagline: data.tagline ?? "",
+    about: data.about ?? "",
+    skills: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+
+  const save = async () => {
+    if (!data.personalId) return;
+    setSaving(true);
+    try {
+      await updatePersonal(data.personalId, {
+        profile: {
+          name: data.name,
+          tagline: form.tagline,
+          role: form.role,
+          bio: data.about ?? "",
+          socials: data.socials ?? {},
+        },
+        about: form.about,
+      });
+      setSavedOk(true);
+      setTimeout(() => { setSavedOk(false); setEditing(false); }, 1200);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const socials = data.socials ?? {};
   const hasSocials = Object.values(socials).some(Boolean);
 
+  if (editing) {
+    return (
+      <div className="space-y-3">
+        <p className="text-xs text-white/40 font-semibold uppercase tracking-wider">내 소개 편집</p>
+        {([
+          ["role", "직함/역할", "예: 프론트엔드 개발자"],
+          ["tagline", "한 줄 소개", "예: 코드로 감성을 그리는 사람"],
+        ] as const).map(([k, label, ph]) => (
+          <div key={k}>
+            <label className="block text-xs text-white/50 mb-1">{label}</label>
+            <input value={form[k]} onChange={(e) => setForm((p) => ({ ...p, [k]: e.target.value }))}
+              placeholder={ph}
+              className="w-full px-3 py-2 rounded-xl bg-white/8 border border-white/15 text-sm text-white placeholder-white/25 focus:border-violet-400 focus:outline-none" />
+          </div>
+        ))}
+        <div>
+          <label className="block text-xs text-white/50 mb-1">소개글</label>
+          <textarea value={form.about} onChange={(e) => setForm((p) => ({ ...p, about: e.target.value }))}
+            placeholder="나를 소개하는 글을 자유롭게 써주세요"
+            rows={4}
+            className="w-full px-3 py-2 rounded-xl bg-white/8 border border-white/15 text-sm text-white placeholder-white/25 focus:border-violet-400 focus:outline-none resize-none" />
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button onClick={save} disabled={saving}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-violet-500 text-white text-sm font-bold hover:bg-violet-600 disabled:opacity-50">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : savedOk ? <Check size={14} /> : <Check size={14} />}
+            {savedOk ? "저장됨!" : "저장"}
+          </button>
+          <button onClick={() => setEditing(false)} className="px-4 py-2.5 rounded-xl bg-white/10 text-white/60 text-sm hover:bg-white/15">취소</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      {/* 프로필 사진 + 기본 정보 */}
+      {/* 상단: 사진 + 기본 정보 */}
       <div className="flex items-center gap-4">
-        <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/20 shrink-0 bg-white/5 flex items-center justify-center">
+        <div className="w-16 h-16 rounded-full overflow-hidden border-2 shrink-0 bg-white/5 flex items-center justify-center"
+          style={{ borderColor: `${data.color}66` }}>
           {data.photo
             ? <Image src={data.photo} alt={data.name} width={64} height={64} className="w-full h-full object-cover" />
-            : <User size={28} className="text-white/30" />
-          }
+            : <User size={28} className="text-white/30" />}
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="font-bold text-white text-base leading-tight">{data.name}</p>
-          {data.role && <p className="text-xs text-white/60 mt-0.5">{data.role}</p>}
-          {data.tagline && <p className="text-xs text-white/40 mt-0.5 italic">{data.tagline}</p>}
+          {data.role && (
+            <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full border"
+              style={{ color: data.color, borderColor: `${data.color}55`, backgroundColor: `${data.color}15` }}>
+              {data.role}
+            </span>
+          )}
+          {data.tagline && <p className="text-xs text-white/40 mt-1 italic">{data.tagline}</p>}
         </div>
+        {isOwner && (
+          <button onClick={() => setEditing(true)}
+            className="p-2 rounded-xl bg-white/10 text-white/50 hover:bg-white/20 hover:text-white transition-colors shrink-0">
+            <Pencil size={14} />
+          </button>
+        )}
       </div>
 
       {/* 소개글 */}
-      {data.about ? (
-        <p className="text-white/70 text-sm leading-relaxed">{data.about}</p>
-      ) : (
-        <p className="text-white/30 text-sm italic">아직 소개가 작성되지 않았어요.</p>
-      )}
+      {data.about
+        ? <p className="text-white/70 text-sm leading-relaxed">{data.about}</p>
+        : isOwner
+          ? <button onClick={() => setEditing(true)} className="w-full py-3 rounded-xl border border-dashed border-white/20 text-white/30 text-sm hover:border-violet-400 hover:text-violet-400 transition-colors">
+              + 소개글 작성하기
+            </button>
+          : <p className="text-white/30 text-sm italic">아직 소개가 작성되지 않았어요.</p>
+      }
 
       {/* 소셜 링크 */}
       {hasSocials && (
-        <div className="flex flex-wrap gap-2 pt-1">
-          {socials.github && (
-            <a href={socials.github} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 text-white/70 text-xs hover:bg-white/20 transition-colors">
-              <Github size={12} />GitHub
-            </a>
-          )}
-          {socials.instagram && (
-            <a href={socials.instagram} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 text-white/70 text-xs hover:bg-white/20 transition-colors">
-              <Instagram size={12} />Instagram
-            </a>
-          )}
-          {socials.linkedin && (
-            <a href={socials.linkedin} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 text-white/70 text-xs hover:bg-white/20 transition-colors">
-              <Linkedin size={12} />LinkedIn
-            </a>
-          )}
-          {socials.website && (
-            <a href={socials.website} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 text-white/70 text-xs hover:bg-white/20 transition-colors">
-              <Globe size={12} />웹사이트
-            </a>
-          )}
-          {socials.email && (
-            <a href={`mailto:${socials.email}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 text-white/70 text-xs hover:bg-white/20 transition-colors">
-              <Mail size={12} />이메일
-            </a>
-          )}
+        <div className="flex flex-wrap gap-2">
+          {socials.github && <SocialLink href={socials.github} icon={<Github size={12} />} label="GitHub" />}
+          {socials.instagram && <SocialLink href={socials.instagram} icon={<Instagram size={12} />} label="Instagram" />}
+          {socials.linkedin && <SocialLink href={socials.linkedin} icon={<Linkedin size={12} />} label="LinkedIn" />}
+          {socials.website && <SocialLink href={socials.website} icon={<Globe size={12} />} label="웹사이트" />}
+          {socials.email && <SocialLink href={`mailto:${socials.email}`} icon={<Mail size={12} />} label="이메일" />}
         </div>
       )}
     </div>
   );
 }
 
-/* ── 갤러리 패널 ──────────────────────────────── */
-function GalleryPanel({ images, color }: { images?: string[]; color: string }) {
+function SocialLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer"
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 text-white/60 text-xs hover:bg-white/20 transition-colors">
+      {icon}{label}
+    </a>
+  );
+}
+
+/* ─── 갤러리 패널 ──────────────────────────────── */
+
+function GalleryPanel({ data, isOwner }: { data: UniverseData; isOwner: boolean }) {
+  const items = data.galleryItems ?? [];
+  const [localItems, setLocalItems] = useState<GalleryItem[]>(items);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (!images || images.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8 text-center">
-        <ImageIcon size={32} className="text-white/20 mb-2" />
-        <p className="text-white/30 text-sm">아직 사진이 없어요.</p>
-        <p className="text-white/20 text-xs mt-1">편집 페이지에서 사진을 추가해보세요.</p>
-      </div>
-    );
-  }
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length || !data.personalId) return;
+    setUploading(true);
+    try {
+      for (const file of files) {
+        // 1. 업로드
+        const url = await uploadPersonalImage(data.personalId, "gallery", file);
 
-  const prev = () => setLightboxIdx((i) => (i !== null ? (i - 1 + images.length) % images.length : null));
-  const next = () => setLightboxIdx((i) => (i !== null ? (i + 1) % images.length : null));
+        // 2. AI 캡션 생성
+        let caption = "";
+        try {
+          const res = await fetch("/api/personal/gallery-caption", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageUrl: url }),
+          });
+          const data = await res.json();
+          caption = data.caption ?? "";
+        } catch { /* 캡션 실패해도 이미지는 저장 */ }
+
+        const newItem: GalleryItem = { url, caption };
+        setLocalItems((prev) => {
+          const updated = [...prev, newItem];
+          // Firestore 저장
+          if (data.personalId) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            updatePersonal(data.personalId, { universe: { galleryItems: updated } as any }).catch(console.error);
+          }
+          return updated;
+        });
+      }
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const prev = () => setLightboxIdx((i) => (i !== null ? (i - 1 + localItems.length) % localItems.length : null));
+  const next = () => setLightboxIdx((i) => (i !== null ? (i + 1) % localItems.length : null));
 
   return (
     <>
-      <div className="grid grid-cols-3 gap-1.5">
-        {images.map((url, i) => (
-          <button
-            key={url}
-            onClick={() => setLightboxIdx(i)}
-            className="aspect-square rounded-xl overflow-hidden hover:opacity-90 transition-opacity"
-          >
-            <Image src={url} alt="" width={120} height={120} className="w-full h-full object-cover" />
-          </button>
-        ))}
-      </div>
+      {localItems.length === 0 && !isOwner ? (
+        <div className="flex flex-col items-center py-8 text-white/30 text-sm">
+          <ImageIcon size={28} className="mb-2" />아직 사진이 없어요.
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-1.5">
+          {localItems.map((item, i) => (
+            <button key={item.url} onClick={() => setLightboxIdx(i)}
+              className="relative aspect-square rounded-xl overflow-hidden group">
+              <Image src={item.url} alt="" width={120} height={120} className="w-full h-full object-cover" />
+              {/* 캡션 오버레이 */}
+              {item.caption && (
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-1.5 py-1.5">
+                  <p className="text-white text-[9px] leading-tight line-clamp-2">{item.caption}</p>
+                </div>
+              )}
+            </button>
+          ))}
+          {/* 오너 + 버튼 */}
+          {isOwner && (
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+              className="aspect-square rounded-xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
+              {uploading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={20} />}
+              {!uploading && <span className="text-[10px] mt-1">추가</span>}
+            </button>
+          )}
+        </div>
+      )}
+      {isOwner && localItems.length === 0 && (
+        <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+          className="w-full mt-2 py-6 border-2 border-dashed border-white/15 rounded-xl flex flex-col items-center gap-2 text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
+          {uploading ? <Loader2 size={22} className="animate-spin" /> : <Plus size={22} />}
+          <span className="text-xs">사진 추가하기</span>
+          <span className="text-[10px] text-white/20">AI가 감성 캡션을 달아드려요</span>
+        </button>
+      )}
+
+      <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
 
       {/* 라이트박스 */}
       {lightboxIdx !== null && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90"
-          onClick={() => setLightboxIdx(null)}
-        >
-          <button
-            onClick={(e) => { e.stopPropagation(); prev(); }}
-            className="absolute left-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"
-          >
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/92"
+          onClick={() => setLightboxIdx(null)}>
+          <button onClick={(e) => { e.stopPropagation(); prev(); }}
+            className="absolute left-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20">
             <ChevronLeft size={24} />
           </button>
-
           <div className="relative max-w-[90vw] max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-            <Image
-              src={images[lightboxIdx]}
-              alt=""
-              width={1200}
-              height={900}
-              className="max-w-[90vw] max-h-[85vh] object-contain rounded-xl"
-            />
-            <p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-white/50 text-xs">
-              {lightboxIdx + 1} / {images.length}
+            <Image src={localItems[lightboxIdx].url} alt="" width={1200} height={900}
+              className="max-w-[90vw] max-h-[80vh] object-contain rounded-2xl" />
+            {localItems[lightboxIdx].caption && (
+              <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/80 to-transparent px-5 py-4">
+                <p className="text-white text-sm text-center italic">{localItems[lightboxIdx].caption}</p>
+              </div>
+            )}
+            <p className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-white/30 text-xs">
+              {lightboxIdx + 1} / {localItems.length}
             </p>
           </div>
-
-          <button
-            onClick={(e) => { e.stopPropagation(); next(); }}
-            className="absolute right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"
-          >
+          <button onClick={(e) => { e.stopPropagation(); next(); }}
+            className="absolute right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20">
             <ChevronRight size={24} />
           </button>
-
-          <button
-            onClick={() => setLightboxIdx(null)}
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"
-          >
+          <button onClick={() => setLightboxIdx(null)}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20">
             <X size={20} />
           </button>
         </div>
@@ -205,28 +308,23 @@ function GalleryPanel({ images, color }: { images?: string[]; color: string }) {
   );
 }
 
-/* ── 메뉴 콘텐츠 디스패처 ──────────────────────── */
-function MenuContent({ menu, data }: { menu: UniverseMenu; data: UniverseData }) {
+/* ─── 메뉴 콘텐츠 ──────────────────────────────── */
+
+function MenuContent({ menu, data, isOwner }: { menu: UniverseMenu; data: UniverseData; isOwner: boolean }) {
   switch (menu.icon) {
-    case "profile":
-      return <ProfilePanel data={data} />;
-    case "gallery":
-      return <GalleryPanel images={data.galleryImages} color={data.color} />;
-    case "diary":
-      return <p className="text-white/50 text-sm py-4 text-center">AI와 대화하며 하루를 기록하는 다이어리예요.<br />곧 연동 예정입니다.</p>;
-    case "link":
-      return <p className="text-white/50 text-sm py-4 text-center">링크 모음은 곧 추가됩니다.</p>;
-    case "music":
-      return <p className="text-white/50 text-sm py-4 text-center">좋아하는 음악 공간. 곧 추가됩니다.</p>;
-    case "note":
-      return <p className="text-white/50 text-sm py-4 text-center">짧은 메모 공간. 곧 추가됩니다.</p>;
-    default:
-      return null;
+    case "profile": return <ProfilePanel data={data} isOwner={isOwner} />;
+    case "gallery": return <GalleryPanel data={data} isOwner={isOwner} />;
+    case "diary":   return <p className="text-white/50 text-sm py-4 text-center">AI 다이어리는 곧 연동됩니다.</p>;
+    case "link":    return <p className="text-white/50 text-sm py-4 text-center">링크 모음은 곧 추가됩니다.</p>;
+    case "music":   return <p className="text-white/50 text-sm py-4 text-center">음악 공간은 곧 추가됩니다.</p>;
+    case "note":    return <p className="text-white/50 text-sm py-4 text-center">메모 공간은 곧 추가됩니다.</p>;
+    default: return null;
   }
 }
 
-/* ── 이웃 구경 모달 ────────────────────────────── */
-function NeighborModal({ onClose }: { onClose: () => void }) {
+/* ─── 이웃 구경 모달 ───────────────────────────── */
+
+function NeighborModal({ onClose, fromId }: { onClose: () => void; fromId?: string }) {
   const [universes, setUniverses] = useState<PersonalSchema[] | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -235,20 +333,18 @@ function NeighborModal({ onClose }: { onClose: () => void }) {
     setLoading(true);
     try {
       const list = await getPublishedUniverses(30);
-      const shuffled = [...list].sort(() => Math.random() - 0.5);
-      setUniverses(shuffled.slice(0, 12));
-    } catch {
-      setUniverses([]);
-    } finally {
-      setLoading(false);
-    }
+      setUniverses([...list].sort(() => Math.random() - 0.5).slice(0, 12));
+    } catch { setUniverses([]); }
+    finally { setLoading(false); }
   }, [universes]);
 
   if (universes === null && !loading) load();
 
   return (
-    <div className="absolute inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full sm:max-w-xl bg-[#0b1026] border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+    <div className="absolute inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}>
+      <div className="w-full sm:max-w-xl bg-[#0b1026] border border-white/10 rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4 shrink-0">
           <div className="flex items-center gap-2 text-white">
             <Sparkles size={18} className="text-violet-400" />
@@ -259,14 +355,14 @@ function NeighborModal({ onClose }: { onClose: () => void }) {
         <div className="overflow-y-auto flex-1 -mx-1 px-1">
           {loading && <div className="flex justify-center py-12"><Loader2 size={28} className="animate-spin text-violet-400" /></div>}
           {!loading && universes?.length === 0 && (
-            <p className="text-center text-white/40 text-sm py-12">아직 다른 별자리가 없어요.<br />첫 이웃이 되어 보세요!</p>
+            <p className="text-center text-white/40 text-sm py-12">아직 다른 별자리가 없어요.</p>
           )}
           {!loading && universes && universes.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {universes.map((p) => (
-                <a key={p.id} href={`/p/${p.id}`}
-                  className="group relative rounded-2xl overflow-hidden border border-white/10 aspect-square flex flex-col hover:border-white/30 transition-colors"
-                  style={{ backgroundColor: "#080b1d" }}>
+                <a key={p.id}
+                  href={`/p/${p.id}${fromId ? `?from=${fromId}` : ""}`}
+                  className="group relative rounded-2xl overflow-hidden border border-white/10 aspect-square flex flex-col hover:border-white/30 transition-colors bg-[#080b1d]">
                   <div className="flex-1 relative">
                     <ConstellationPreview name={p.profile.name} color={p.universe!.color} favoriteNumber={p.universe!.favoriteNumber} />
                   </div>
@@ -289,11 +385,17 @@ function NeighborModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-/* ── 메인 컴포넌트 ─────────────────────────────── */
+/* ─── 메인 컴포넌트 ────────────────────────────── */
+
 export function UniverseHome({ data }: { data: UniverseData }) {
   const constellation = generateConstellation(data.name, data.color, data.favoriteNumber);
   const [openMenu, setOpenMenu] = useState<UniverseMenu | null>(null);
   const [showNeighbors, setShowNeighbors] = useState(false);
+  const searchParams = useSearchParams();
+  const fromId = searchParams.get("from") ?? undefined;
+
+  const { user } = useAuthStore();
+  const isOwner = !!user && !!data.ownerId && user.uid === data.ownerId;
 
   const style = data.style ?? {};
 
@@ -305,6 +407,28 @@ export function UniverseHome({ data }: { data: UniverseData }) {
         lineStyle={style.lineStyle ?? "flow"}
         starGlow={style.starGlow ?? "default"}
       />
+
+      {/* 떠다니는 에셋 */}
+      {data.selectedAssets && data.selectedAssets.length > 0 && (
+        <FloatingAssets selectedIds={data.selectedAssets} seed={constellation.seed} />
+      )}
+
+      {/* ← 이전 우주로 돌아가기 버튼 */}
+      {fromId && (
+        <a href={`/p/${fromId}`}
+          className="absolute top-4 left-4 z-20 flex items-center gap-1.5 px-3 py-2 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/70 text-xs font-medium hover:bg-black/50 hover:text-white transition-colors">
+          <ChevronLeft size={14} />내 우주로
+        </a>
+      )}
+
+      {/* 오너 표시 */}
+      {isOwner && (
+        <div className="absolute top-4 right-4 z-20">
+          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 border border-white/20 text-white/50 text-[10px] font-medium backdrop-blur-sm">
+            <Pencil size={9} />내 우주
+          </span>
+        </div>
+      )}
 
       {/* 중앙 별자리 이름 */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none z-10">
@@ -352,14 +476,16 @@ export function UniverseHome({ data }: { data: UniverseData }) {
               <button onClick={() => setOpenMenu(null)} className="text-white/50 hover:text-white"><X size={20} /></button>
             </div>
             <div className="overflow-y-auto flex-1 min-h-[80px]">
-              <MenuContent menu={openMenu} data={data} />
+              <MenuContent menu={openMenu} data={data} isOwner={isOwner} />
             </div>
           </div>
         </div>
       )}
 
       {/* 이웃 구경 모달 */}
-      {showNeighbors && <NeighborModal onClose={() => setShowNeighbors(false)} />}
+      {showNeighbors && (
+        <NeighborModal onClose={() => setShowNeighbors(false)} fromId={data.personalId} />
+      )}
     </div>
   );
 }
