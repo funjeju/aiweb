@@ -66,19 +66,51 @@ const DEFAULT_POS = [
 
 function ProfilePanel({ data, isOwner }: { data: UniverseData; isOwner: boolean }) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ role: data.role ?? "", tagline: data.tagline ?? "", about: data.about ?? "" });
+  // 저장 후에도 뷰에서 최신값이 보이도록 로컬 카피 유지
+  const [local, setLocal] = useState({
+    role: data.role ?? "",
+    tagline: data.tagline ?? "",
+    about: data.about ?? "",
+    photo: data.photo ?? "",
+  });
+  const [form, setForm] = useState({ role: local.role, tagline: local.tagline, about: local.about });
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoRef = useRef<HTMLInputElement>(null);
+
+  const openEdit = () => {
+    setForm({ role: local.role, tagline: local.tagline, about: local.about });
+    setEditing(true);
+  };
 
   const save = async () => {
     if (!data.personalId) return;
     setSaving(true);
     try {
+      // dot-notation: profile 객체 전체 교체 방지
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await updatePersonal(data.personalId, {
-        profile: { name: data.name, tagline: form.tagline, role: form.role, bio: data.about ?? "", socials: data.socials ?? {} },
+        "profile.role": form.role,
+        "profile.tagline": form.tagline,
+        "profile.bio": form.about,
         about: form.about,
-      });
+      } as any);
+      setLocal((p) => ({ ...p, role: form.role, tagline: form.tagline, about: form.about }));
       setEditing(false);
     } finally { setSaving(false); }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !data.personalId) return;
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadPersonalImage(data.personalId, "photo", file);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await updatePersonal(data.personalId, { "profile.photo": url } as any);
+      setLocal((p) => ({ ...p, photo: url }));
+    } catch { alert("사진 업로드에 실패했습니다."); }
+    finally { setUploadingPhoto(false); e.target.value = ""; }
   };
 
   const socials = data.socials ?? {};
@@ -114,40 +146,56 @@ function ProfilePanel({ data, isOwner }: { data: UniverseData; isOwner: boolean 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
-        <div className="w-16 h-16 rounded-full overflow-hidden border-2 shrink-0 bg-white/5 flex items-center justify-center"
-          style={{ borderColor: `${data.color}66` }}>
-          {data.photo ? <Image src={data.photo} alt={data.name} width={64} height={64} className="w-full h-full object-cover" />
-            : <User size={28} className="text-white/30" />}
+        {/* 프로필 사진 — 오너면 클릭 업로드 */}
+        <div className="relative shrink-0">
+          <div className="w-16 h-16 rounded-full overflow-hidden border-2 bg-white/5 flex items-center justify-center"
+            style={{ borderColor: `${data.color}66` }}>
+            {local.photo
+              ? <Image src={local.photo} alt={data.name} width={64} height={64} className="w-full h-full object-cover" />
+              : <User size={28} className="text-white/30" />}
+          </div>
+          {isOwner && (
+            <button onClick={() => photoRef.current?.click()} disabled={uploadingPhoto}
+              className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-violet-500 flex items-center justify-center border-2 border-[#0b1026] hover:bg-violet-600 transition-colors">
+              {uploadingPhoto ? <Loader2 size={10} className="animate-spin text-white" /> : <Plus size={10} className="text-white" />}
+            </button>
+          )}
+          <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
         </div>
+
         <div className="flex-1 min-w-0">
           <p className="font-bold text-white text-base leading-tight">{data.name}</p>
-          {data.role && (
+          {local.role && (
             <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full border"
               style={{ color: data.color, borderColor: `${data.color}55`, backgroundColor: `${data.color}15` }}>
-              {data.role}
+              {local.role}
             </span>
           )}
-          {data.tagline && <p className="text-xs text-white/40 mt-1 italic">{data.tagline}</p>}
+          {local.tagline && <p className="text-xs text-white/40 mt-1 italic">{local.tagline}</p>}
         </div>
         {isOwner && (
-          <button onClick={() => setEditing(true)} className="p-2 rounded-xl bg-white/10 text-white/50 hover:bg-white/20 hover:text-white transition-colors shrink-0">
+          <button onClick={openEdit} className="p-2 rounded-xl bg-white/10 text-white/50 hover:bg-white/20 hover:text-white transition-colors shrink-0">
             <Pencil size={14} />
           </button>
         )}
       </div>
-      {data.about ? <p className="text-white/70 text-sm leading-relaxed">{data.about}</p>
-        : isOwner ? (
-          <button onClick={() => setEditing(true)} className="w-full py-3 rounded-xl border border-dashed border-white/20 text-white/30 text-sm hover:border-violet-400 hover:text-violet-400 transition-colors">
-            + 소개글 작성하기
-          </button>
-        ) : <p className="text-white/30 text-sm italic">아직 소개가 작성되지 않았어요.</p>}
+
+      {/* 소개글 */}
+      {local.about
+        ? <p className="text-white/70 text-sm leading-relaxed whitespace-pre-wrap">{local.about}</p>
+        : isOwner
+          ? <button onClick={openEdit} className="w-full py-3 rounded-xl border border-dashed border-white/20 text-white/30 text-sm hover:border-violet-400 hover:text-violet-400 transition-colors">
+              + 소개글 작성하기
+            </button>
+          : <p className="text-white/30 text-sm italic">아직 소개가 작성되지 않았어요.</p>}
+
       {Object.values(socials).some(Boolean) && (
         <div className="flex flex-wrap gap-2">
-          {socials.github && <SocialLink href={socials.github} icon={<Github size={12} />} label="GitHub" />}
-          {socials.instagram && <SocialLink href={socials.instagram} icon={<Instagram size={12} />} label="Instagram" />}
-          {socials.linkedin && <SocialLink href={socials.linkedin} icon={<Linkedin size={12} />} label="LinkedIn" />}
-          {socials.website && <SocialLink href={socials.website} icon={<Globe size={12} />} label="웹사이트" />}
-          {socials.email && <SocialLink href={`mailto:${socials.email}`} icon={<Mail size={12} />} label="이메일" />}
+          {socials.github    && <SocialLink href={socials.github}                icon={<Github    size={12} />} label="GitHub"    />}
+          {socials.instagram && <SocialLink href={socials.instagram}             icon={<Instagram size={12} />} label="Instagram" />}
+          {socials.linkedin  && <SocialLink href={socials.linkedin}              icon={<Linkedin  size={12} />} label="LinkedIn"  />}
+          {socials.website   && <SocialLink href={socials.website}               icon={<Globe     size={12} />} label="웹사이트"  />}
+          {socials.email     && <SocialLink href={`mailto:${socials.email}`}     icon={<Mail      size={12} />} label="이메일"    />}
         </div>
       )}
     </div>
@@ -166,85 +214,102 @@ function SocialLink({ href, icon, label }: { href: string; icon: React.ReactNode
 /* ─── 갤러리 패널 ──────────────────────────────── */
 
 function GalleryPanel({ data, isOwner }: { data: UniverseData; isOwner: boolean }) {
-  const [localItems, setLocalItems] = useState<GalleryItem[]>(data.galleryItems ?? []);
+  const [items, setItems] = useState<GalleryItem[]>(data.galleryItems ?? []);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const saveToDb = async (updated: GalleryItem[]) => {
+    if (!data.personalId) return;
+    setSaving(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await updatePersonal(data.personalId, { "universe.galleryItems": updated } as any);
+    } finally { setSaving(false); }
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (!files.length || !data.personalId) return;
     setUploading(true);
     try {
+      const newItems: GalleryItem[] = [];
       for (const file of files) {
         const url = await uploadPersonalImage(data.personalId, "gallery", file);
-        let caption = "";
-        try {
-          const res = await fetch("/api/personal/gallery-caption", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageUrl: url }) });
-          caption = (await res.json()).caption ?? "";
-        } catch { /* 캡션 실패해도 진행 */ }
-        setLocalItems((prev) => {
-          const updated = [...prev, { url, caption }];
-          if (data.personalId) {
-            // dot-notation으로 universe.galleryItems 필드만 업데이트 (다른 필드 덮어쓰기 방지)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            updatePersonal(data.personalId, { "universe.galleryItems": updated } as any).catch(console.error);
-          }
-          return updated;
-        });
+        newItems.push({ url });
       }
-    } finally { setUploading(false); e.target.value = ""; }
+      const updated = [...items, ...newItems];
+      setItems(updated);
+      await saveToDb(updated);
+    } catch { alert("업로드에 실패했습니다."); }
+    finally { setUploading(false); e.target.value = ""; }
   };
 
-  const prev = () => setLightboxIdx((i) => (i !== null ? (i - 1 + localItems.length) % localItems.length : null));
-  const next = () => setLightboxIdx((i) => (i !== null ? (i + 1) % localItems.length : null));
+  const deleteItem = async (idx: number) => {
+    const updated = items.filter((_, i) => i !== idx);
+    setItems(updated);
+    await saveToDb(updated);
+  };
+
+  const prevImg = () => setLightboxIdx((i) => (i !== null ? (i - 1 + items.length) % items.length : null));
+  const nextImg = () => setLightboxIdx((i) => (i !== null ? (i + 1) % items.length : null));
+
+  if (items.length === 0 && !isOwner) {
+    return <div className="flex flex-col items-center py-8 text-white/30 text-sm gap-2"><ImageIcon size={28} />아직 사진이 없어요.</div>;
+  }
 
   return (
     <>
-      {localItems.length === 0 && !isOwner ? (
-        <div className="flex flex-col items-center py-8 text-white/30 text-sm gap-2"><ImageIcon size={28} />아직 사진이 없어요.</div>
-      ) : (
-        <div className="grid grid-cols-3 gap-1.5">
-          {localItems.map((item, i) => (
-            <button key={item.url} onClick={() => setLightboxIdx(i)} className="relative aspect-square rounded-xl overflow-hidden group">
+      <div className="grid grid-cols-3 gap-1.5">
+        {items.map((item, i) => (
+          <div key={item.url} className="relative aspect-square rounded-xl overflow-hidden group">
+            <button onClick={() => setLightboxIdx(i)} className="w-full h-full">
               <Image src={item.url} alt="" width={120} height={120} className="w-full h-full object-cover" />
-              {item.caption && (
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-1.5 py-1.5">
-                  <p className="text-white text-[9px] leading-tight line-clamp-2">{item.caption}</p>
-                </div>
-              )}
             </button>
-          ))}
-          {isOwner && (
-            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-              className="aspect-square rounded-xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
-              {uploading ? <Loader2 size={18} className="animate-spin" /> : <><Plus size={20} /><span className="text-[10px] mt-1">추가</span></>}
-            </button>
-          )}
-        </div>
-      )}
-      {isOwner && localItems.length === 0 && (
+            {/* 삭제 버튼 */}
+            {isOwner && (
+              <button onClick={() => deleteItem(i)}
+                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80">
+                <X size={10} className="text-white" />
+              </button>
+            )}
+          </div>
+        ))}
+
+        {/* 업로드 추가 버튼 */}
+        {isOwner && (
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading || saving}
+            className="aspect-square rounded-xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
+            {uploading
+              ? <Loader2 size={18} className="animate-spin" />
+              : saving
+                ? <Loader2 size={18} className="animate-spin text-violet-400" />
+                : <><Plus size={20} /><span className="text-[10px] mt-1">추가</span></>}
+          </button>
+        )}
+      </div>
+
+      {/* 빈 상태 업로드 버튼 */}
+      {isOwner && items.length === 0 && (
         <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
           className="w-full mt-2 py-6 border-2 border-dashed border-white/15 rounded-xl flex flex-col items-center gap-2 text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
           {uploading ? <Loader2 size={22} className="animate-spin" /> : <Plus size={22} />}
           <span className="text-xs">사진 추가하기</span>
-          <span className="text-[10px] text-white/20">AI가 감성 캡션을 달아드려요</span>
         </button>
       )}
+
       <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
+
+      {/* 라이트박스 */}
       {lightboxIdx !== null && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/92" onClick={() => setLightboxIdx(null)}>
-          <button onClick={(e) => { e.stopPropagation(); prev(); }} className="absolute left-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"><ChevronLeft size={24} /></button>
+          <button onClick={(e) => { e.stopPropagation(); prevImg(); }} className="absolute left-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"><ChevronLeft size={24} /></button>
           <div className="relative max-w-[90vw] max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-            <Image src={localItems[lightboxIdx].url} alt="" width={1200} height={900} className="max-w-[90vw] max-h-[80vh] object-contain rounded-2xl" />
-            {localItems[lightboxIdx].caption && (
-              <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/80 to-transparent px-5 py-4">
-                <p className="text-white text-sm text-center italic">{localItems[lightboxIdx].caption}</p>
-              </div>
-            )}
-            <p className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-white/30 text-xs">{lightboxIdx + 1} / {localItems.length}</p>
+            <Image src={items[lightboxIdx].url} alt="" width={1200} height={900} className="max-w-[90vw] max-h-[80vh] object-contain rounded-2xl" />
+            <p className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-white/30 text-xs">{lightboxIdx + 1} / {items.length}</p>
           </div>
-          <button onClick={(e) => { e.stopPropagation(); next(); }} className="absolute right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"><ChevronRight size={24} /></button>
+          <button onClick={(e) => { e.stopPropagation(); nextImg(); }} className="absolute right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"><ChevronRight size={24} /></button>
           <button onClick={() => setLightboxIdx(null)} className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20"><X size={20} /></button>
         </div>
       )}
