@@ -82,9 +82,8 @@ export function StarfieldCanvas({
     const spawnShootingStar = () => {
       // 방향 4가지: 좌→우, 우→좌, 위→아래(대각), 위→아래(대각반대)
       const dir = Math.floor(Math.random() * 4);
-      // 느리고 오래 — 화면을 가로/세로로 완전히 횡단
-      const speed = 3.5 + Math.random() * 2.5;
-      // maxLife를 넉넉하게 (화면 대각선 완주: ~150~200프레임)
+      // 정규화 속도 (0~1 좌표계에서 프레임당 이동량) — 180프레임 내 화면 횡단
+      const speed = 0.006 + Math.random() * 0.004;
       const maxLife = 150 + Math.floor(Math.random() * 60);
 
       let x: number, y: number, vx: number, vy: number;
@@ -92,27 +91,27 @@ export function StarfieldCanvas({
       if (dir === 0) {
         // 좌 → 우 (약간 아래)
         x = -0.08; y = 0.05 + Math.random() * 0.5;
-        const a = 0.08 + Math.random() * 0.2; // 얕은 각도
-        vx = Math.cos(a) * speed / w * 100;
-        vy = Math.sin(a) * speed / h * 100;
+        const a = 0.08 + Math.random() * 0.2;
+        vx = Math.cos(a) * speed;
+        vy = Math.sin(a) * speed;
       } else if (dir === 1) {
         // 우 → 좌 (약간 아래)
         x = 1.08; y = 0.05 + Math.random() * 0.5;
         const a = 0.08 + Math.random() * 0.2;
-        vx = -Math.cos(a) * speed / w * 100;
-        vy = Math.sin(a) * speed / h * 100;
+        vx = -Math.cos(a) * speed;
+        vy = Math.sin(a) * speed;
       } else if (dir === 2) {
         // 위 → 아래 (왼쪽에서 오른쪽 대각)
         x = Math.random() * 0.6; y = -0.08;
         const a = Math.PI / 2 - 0.3 + Math.random() * 0.3;
-        vx = Math.cos(a) * speed / w * 100;
-        vy = Math.sin(a) * speed / h * 100;
+        vx = Math.cos(a) * speed;
+        vy = Math.sin(a) * speed;
       } else {
         // 위 → 아래 (오른쪽에서 왼쪽 대각)
         x = 0.4 + Math.random() * 0.6; y = -0.08;
         const a = Math.PI / 2 - 0.3 + Math.random() * 0.3;
-        vx = -Math.cos(a) * speed / w * 100;
-        vy = Math.sin(a) * speed / h * 100;
+        vx = -Math.cos(a) * speed;
+        vy = Math.sin(a) * speed;
       }
 
       shootingStars.push({ x, y, vx, vy, life: 0, maxLife, len: 0.18 + Math.random() * 0.1 });
@@ -231,8 +230,8 @@ export function StarfieldCanvas({
 
         const px = ss.x * w;
         const py = ss.y * h;
-        const tailX = px - ss.vx * ss.len * w * 0.3;
-        const tailY = py - ss.vy * ss.len * h * 0.3;
+        const tailX = px - ss.vx * w * 18;
+        const tailY = py - ss.vy * h * 18;
 
         // 꼬리 그라데이션
         const lg = ctx.createLinearGradient(tailX, tailY, px, py);
@@ -253,8 +252,8 @@ export function StarfieldCanvas({
         ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill();
 
         // 위치 업데이트
-        ss.x += ss.vx / w;
-        ss.y += ss.vy / h;
+        ss.x += ss.vx;
+        ss.y += ss.vy;
         ss.life++;
       }
       ctx.globalAlpha = 1;
