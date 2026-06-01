@@ -11,7 +11,7 @@ import { logout } from "@/lib/firebase/auth";
 import type { SiteSchema } from "@/lib/types/site";
 import type { PersonalSchema } from "@/lib/types/personal";
 import { getAppUrl } from "@/lib/utils";
-import { updateSlugTarget } from "@/lib/slug-registry";
+// slug 재등록은 서버사이드 API route로 처리 (CORS 우회)
 import {
   Plus, Globe, Pencil, ExternalLink, Sparkles, LogOut, User,
   MoreVertical, Trash2, Layers, Star, Building2, RefreshCw,
@@ -288,19 +288,26 @@ function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () =
     catch { setDeleting(false); alert("삭제에 실패했습니다."); }
   };
 
-  // 슬러그 target_url을 현재 살아있는 URL로 재등록
+  // 슬러그 재등록 — 서버사이드 API route 호출 (CORS 우회)
   const handleFixSlug = async () => {
     setMenuOpen(false);
-    if (!page.publicSlug) { alert("등록된 슬러그가 없습니다."); return; }
+    // publicSlug가 없으면 personalId를 slug로 사용해서 새로 발급
+    const slugToFix = page.publicSlug || page.id;
     setFixing(true);
     try {
-      const newTarget = `${window.location.origin}/p/${page.id}`;
-      const result = await updateSlugTarget(page.publicSlug, newTarget);
-      if (result.success) {
-        alert(`✅ 슬러그 URL 재등록 완료!\n${page.publicSlug} → ${newTarget}`);
+      const res = await fetch("/api/slug/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: slugToFix, personalId: page.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ 주소 등록 완료!\n${data.publicUrl}\n\n페이지를 새로고침하면 반영됩니다.`);
       } else {
-        alert(`❌ 재등록 실패: ${result.error}`);
+        alert(`❌ 등록 실패: ${data.error}`);
       }
+    } catch (e) {
+      alert(`❌ 오류: ${String(e)}`);
     } finally { setFixing(false); }
   };
 
@@ -348,12 +355,10 @@ function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () =
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
               <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-20">
-                {page.publicSlug && (
-                  <button onClick={handleFixSlug}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-violet-600 hover:bg-violet-50">
-                    <RefreshCw size={14} />슬러그 URL 재등록
-                  </button>
-                )}
+                <button onClick={handleFixSlug}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-violet-600 hover:bg-violet-50">
+                  <RefreshCw size={14} />{page.publicUrl ? "주소 재등록" : "주소 발급"}
+                </button>
                 <button onClick={handleDelete}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50">
                   <Trash2 size={14} />삭제

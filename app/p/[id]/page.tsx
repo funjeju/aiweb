@@ -56,6 +56,14 @@ export default async function PersonalPage({ params }: Props) {
     const bgmList = p.universe.bgmList
       ?? (p.universe.bgm ? [p.universe.bgm] : []);
 
+    // publicUrl 폴백: publicSlug로 구성, 없으면 직접 URL
+    const slugDomain = process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "study.funjeju.com";
+    const appUrl     = process.env.NEXT_PUBLIC_APP_URL     ?? "";
+    const publicUrl  = p.publicUrl
+      || (p.publicSlug ? `https://${slugDomain}/${p.publicSlug}` : null)
+      || (appUrl ? `${appUrl}/p/${p.id}` : null)
+      || null;
+
     const universeData = {
       name: p.profile.name,
       color: p.universe.color ?? "#a78bfa",
@@ -69,7 +77,7 @@ export default async function PersonalPage({ params }: Props) {
       role: p.profile.role,
       socials: p.profile.socials,
       galleryItems,
-      publicUrl: p.publicUrl,
+      publicUrl: publicUrl ?? undefined,
       ownerId: p.ownerId,
       personalId: p.id,
       selectedAssets: p.universe.selectedAssets,

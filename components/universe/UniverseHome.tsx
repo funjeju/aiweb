@@ -199,8 +199,13 @@ function ProfilePanel({ data, isOwner, onSaved }: {
             </button>
           : <p className="text-white/30 text-sm italic">아직 소개가 작성되지 않았어요.</p>}
 
-      {/* 도메인 주소 + 복사 버튼 */}
-      {data.publicUrl && <UrlCopyRow url={data.publicUrl} color={data.color} />}
+      {/* 도메인 주소 + 복사 버튼 — publicUrl 없으면 현재 origin 기반 직접 URL */}
+      {(() => {
+        const url = data.publicUrl
+          || (data.personalId && typeof window !== "undefined"
+            ? `${window.location.origin}/p/${data.personalId}` : null);
+        return url ? <UrlCopyRow url={url} color={data.color} /> : null;
+      })()}
 
       {Object.values(socials).some(Boolean) && (
         <div className="flex flex-wrap gap-2">
