@@ -8,7 +8,7 @@ import { PersonalSite } from "@/components/personal/PersonalSite";
 import { UniverseHome } from "@/components/universe/UniverseHome";
 
 export const runtime = "nodejs";
-export const revalidate = 3600;
+export const revalidate = 30;
 
 interface Props { params: Promise<{ id: string }>; }
 
@@ -52,10 +52,15 @@ export default async function PersonalPage({ params }: Props) {
     const galleryItems = p.universe.galleryItems
       ?? (p.universe.galleryImages ?? []).map((url) => ({ url }));
 
+    // bgm(구버전 단일) → bgmList 마이그레이션
+    const bgmList = p.universe.bgmList
+      ?? (p.universe.bgm ? [p.universe.bgm] : []);
+
     const universeData = {
       name: p.profile.name,
-      color: p.universe.color,
-      favoriteNumber: p.universe.favoriteNumber,
+      color: p.universe.color ?? "#a78bfa",
+      favoriteNumber: p.universe.favoriteNumber ?? 7,
+      constellationSeed: p.universe.constellationSeed,
       menus: p.universe.menus ?? [],
       about: p.about || p.profile.bio,
       style: p.universe.style,
@@ -67,7 +72,7 @@ export default async function PersonalPage({ params }: Props) {
       ownerId: p.ownerId,
       personalId: p.id,
       selectedAssets: p.universe.selectedAssets,
-      bgm: p.universe.bgm,
+      bgmList,
       menuLayout: p.universe.menuLayout,
       assetPositions: p.universe.assetPositions,
     };

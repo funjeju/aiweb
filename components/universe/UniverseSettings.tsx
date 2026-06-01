@@ -15,9 +15,11 @@ type Tab = "assets" | "bgm" | "layout";
 
 interface MenuNode { id: string; label: string; }
 
+export interface BgmTrack { url: string; name: string; autoPlay?: boolean; }
+
 interface SettingsState {
   selectedAssets: string[];
-  bgm: { url: string; name: string; autoPlay: boolean } | null;
+  bgmList: BgmTrack[];
   menuLayout: Record<string, { top: string; left: string }>;
   assetPositions: Record<string, { top: string; left: string }>;
 }
@@ -176,24 +178,24 @@ function LayoutTab({
   );
 }
 
-/* ─── BGM 탭 ─────────────────────────────────── */
-// 별도 오디오 인스턴스 없음 — 하단 BgmPlayer(단일 오디오)를 onToggleBgm으로 제어
+/* ─── BGM 탭 (누적 목록, 최대 3개) ─────────────── */
 
 function BgmTab({
   personalId,
-  bgm,
+  bgmList,
   bgmPlaying,
   onToggleBgm,
   onChange,
 }: {
   personalId: string;
-  bgm: SettingsState["bgm"];
+  bgmList: BgmTrack[];
   bgmPlaying: boolean;
   onToggleBgm: () => void;
-  onChange: (bgm: SettingsState["bgm"]) => void;
+  onChange: (list: BgmTrack[]) => void;
 }) {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const MAX = 3;
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -202,7 +204,7 @@ function BgmTab({
     try {
       const url = await uploadPersonalAudio(personalId, file);
       const name = file.name.replace(/\.[^.]+$/, "");
-      onChange({ url, name, autoPlay: bgm?.autoPlay ?? false });
+      onChange([...bgmList, { url, name, autoPlay: false }]);
     } catch {
       alert("업로드에 실패했습니다.");
     } finally {
@@ -211,55 +213,65 @@ function BgmTab({
     }
   };
 
+  const remove = (idx: number) => onChange(bgmList.filter((_, i) => i !== idx));
+
+  const toggleAutoPlay = (idx: number) =>
+    onChange(bgmList.map((t, i) => i === idx ? { ...t, autoPlay: !t.autoPlay } : t));
+
   return (
     <div className="space-y-4">
       <p className="text-xs text-white/50">
-        내 우주에서 흘러나올 배경음악을 설정하세요.<br />
-        MP3 · WAV · OGG 형식 지원 (최대 20MB 권장)
+        배경음악을 최대 {MAX}개까지 추가할 수 있어요.<br />
+        MP3 · WAV · OGG 형식 지원
       </p>
 
-      {bgm?.url ? (
-        <div className="rounded-2xl bg-white/5 border border-white/10 p-4 space-y-3">
-          {/* 현재 트랙 — 하단 플레이어와 동일한 오디오 제어 */}
-          <div className="flex items-center gap-3">
-            <button onClick={onToggleBgm}
-              className="w-10 h-10 rounded-full bg-violet-500/30 border border-violet-400/50 flex items-center justify-center text-white hover:bg-violet-500/50 transition-colors">
-              {bgmPlaying ? <Pause size={16} /> : <Play size={16} />}
-            </button>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white truncate">{bgm.name}</p>
-              <p className="text-xs text-white/40">우주 배경음악</p>
+      {/* 트랙 목록 */}
+      {bgmList.length > 0 && (
+        <div className="space-y-2">
+          {bgmList.map((track, i) => (
+            <div key={track.url + i} className="rounded-2xl bg-white/5 border border-white/10 p-3 space-y-2">
+              <div className="flex items-center gap-3">
+                {/* 재생/일시정지: 첫 번째 트랙만 실제 오디오 제어 (현재 구조상) */}
+                <button onClick={onToggleBgm}
+                  className="w-9 h-9 rounded-full bg-violet-500/30 border border-violet-400/50 flex items-center justify-center text-white hover:bg-violet-500/50 transition-colors shrink-0">
+                  {i === 0 && bgmPlaying ? <Pause size={14} /> : <Play size={14} />}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{track.name}</p>
+                  <p className="text-[10px] text-white/30">트랙 {i + 1}</p>
+                </div>
+                <button onClick={() => remove(i)}
+                  className="p-1.5 text-white/30 hover:text-red-400 transition-colors shrink-0">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              {/* 자동재생 토글 (첫 번째 트랙에만) */}
+              {i === 0 && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <div onClick={() => toggleAutoPlay(0)}
+                    className={cn("w-9 h-5 rounded-full transition-colors relative cursor-pointer",
+                      track.autoPlay ? "bg-violet-500" : "bg-white/20")}>
+                    <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform",
+                      track.autoPlay ? "translate-x-4" : "translate-x-0.5")} />
+                  </div>
+                  <span className="text-xs text-white/60">방문 시 자동재생</span>
+                </label>
+              )}
             </div>
-            <button onClick={() => onChange(null)}
-              className="p-1.5 text-white/30 hover:text-red-400 transition-colors">
-              <Trash2 size={14} />
-            </button>
-          </div>
-
-          {/* 자동재생 토글 */}
-          <label className="flex items-center gap-2 cursor-pointer">
-            <div onClick={() => onChange({ ...bgm, autoPlay: !bgm.autoPlay })}
-              className={cn("w-10 h-5 rounded-full transition-colors relative cursor-pointer",
-                bgm.autoPlay ? "bg-violet-500" : "bg-white/20")}>
-              <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform",
-                bgm.autoPlay ? "translate-x-5" : "translate-x-0.5")} />
-            </div>
-            <span className="text-sm text-white/70">방문 시 자동재생</span>
-          </label>
-
-          {/* 교체 */}
-          <button onClick={() => fileRef.current?.click()} disabled={uploading}
-            className="w-full py-2 rounded-xl border border-dashed border-white/20 text-xs text-white/40 hover:border-violet-400 hover:text-violet-400 transition-colors">
-            {uploading ? "업로드 중..." : "다른 음악으로 교체"}
-          </button>
+          ))}
         </div>
-      ) : (
+      )}
+
+      {/* 추가 버튼 */}
+      {bgmList.length < MAX ? (
         <button onClick={() => fileRef.current?.click()} disabled={uploading}
-          className="w-full py-8 rounded-2xl border-2 border-dashed border-white/15 flex flex-col items-center gap-2 text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
-          {uploading ? <Loader2 size={24} className="animate-spin" /> : <Upload size={24} />}
-          <span className="text-sm font-medium">{uploading ? "업로드 중..." : "음악 파일 업로드"}</span>
+          className="w-full py-6 rounded-2xl border-2 border-dashed border-white/15 flex flex-col items-center gap-2 text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
+          {uploading ? <Loader2 size={22} className="animate-spin" /> : <Upload size={22} />}
+          <span className="text-sm font-medium">{uploading ? "업로드 중..." : `음악 추가 (${bgmList.length}/${MAX})`}</span>
           <span className="text-xs text-white/20">MP3, WAV, OGG</span>
         </button>
+      ) : (
+        <p className="text-xs text-white/30 text-center py-2">최대 {MAX}개까지 추가할 수 있어요.</p>
       )}
 
       <input ref={fileRef} type="file" accept="audio/*" className="hidden" onChange={handleUpload} />
@@ -312,7 +324,7 @@ export function UniverseSettings({
   personalId,
   menus,
   initialAssets,
-  initialBgm,
+  initialBgmList,
   initialLayout,
   initialAssetPositions,
   allAssets = DEFAULT_ASSETS,
@@ -324,7 +336,7 @@ export function UniverseSettings({
   personalId: string;
   menus: MenuNode[];
   initialAssets: string[];
-  initialBgm: { url: string; name: string; autoPlay?: boolean } | null | undefined;
+  initialBgmList: BgmTrack[];
   initialLayout: Record<string, { top: string; left: string }> | undefined;
   initialAssetPositions?: Record<string, { top: string; left: string }>;
   allAssets?: UniverseAsset[];
@@ -337,7 +349,7 @@ export function UniverseSettings({
   const [saving, setSaving] = useState(false);
   const [state, setState] = useState<SettingsState>({
     selectedAssets: initialAssets,
-    bgm: initialBgm ? { url: initialBgm.url, name: initialBgm.name, autoPlay: initialBgm.autoPlay ?? false } : null,
+    bgmList: initialBgmList,
     menuLayout: initialLayout ?? {},
     assetPositions: initialAssetPositions ?? {},
   });
@@ -353,15 +365,8 @@ export function UniverseSettings({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const update: Record<string, any> = {
         "universe.selectedAssets": state.selectedAssets,
+        "universe.bgmList": state.bgmList,
       };
-
-      if (state.bgm) {
-        update["universe.bgm"] = {
-          url: state.bgm.url,
-          name: state.bgm.name,
-          autoPlay: state.bgm.autoPlay ?? false,
-        };
-      }
 
       if (Object.keys(state.menuLayout).length > 0) {
         update["universe.menuLayout"] = state.menuLayout;
@@ -421,10 +426,10 @@ export function UniverseSettings({
           {tab === "bgm" && (
             <BgmTab
               personalId={personalId}
-              bgm={state.bgm}
+              bgmList={state.bgmList}
               bgmPlaying={bgmPlaying}
               onToggleBgm={onToggleBgm}
-              onChange={(bgm) => setState((p) => ({ ...p, bgm }))}
+              onChange={(bgmList) => setState((p) => ({ ...p, bgmList }))}
             />
           )}
           {tab === "layout" && (

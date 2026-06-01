@@ -137,22 +137,27 @@ function buildLinks(stars: ConstellationStar[]): Array<[number, number]> {
 }
 
 /**
- * 이름 + 색 + 숫자 → 고유 별자리 생성 (결정론적).
- * 실제 밝은 별 5~8개를 시드로 뽑아, 그 별들의 "실제 적경/적위 상대 위치"로 배치.
- * → 실제 하늘에서 같은 별들을 찾아 이으면 동일한 모양이 되는 "실제 별자리".
+ * 시드 값으로 별자리를 직접 생성 (DB에 저장된 고정 시드용).
+ * 한 번 만들어진 별자리는 시드가 같으면 항상 동일한 모양.
  */
-export function generateConstellation(name: string, color: string, favoriteNumber: number): Constellation {
-  const seed = (hashString(`${name}|${color}|${favoriteNumber}`) ^ (favoriteNumber * 2654435761)) >>> 0;
+export function generateConstellationFromSeed(seed: number, color: string): Constellation {
   const rng = mulberry32(seed);
-
-  const count = 5 + Math.floor(rng() * 4); // 5~8개
+  const count = 5 + Math.floor(rng() * 4);
   const pool = [...BRIGHT_STARS];
   const chosen: RealStar[] = [];
   for (let i = 0; i < count && pool.length; i++) {
     chosen.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
   }
-
   const stars = projectStars(chosen);
   const links = buildLinks(stars);
   return { seed, stars, links, primaryColor: color };
+}
+
+/**
+ * 이름 + 색 + 숫자 → 고유 별자리 생성 (처음 만들 때 한 번만 호출).
+ * 반환된 seed를 DB에 저장해두면, 이후엔 generateConstellationFromSeed를 쓴다.
+ */
+export function generateConstellation(name: string, color: string, favoriteNumber: number): Constellation {
+  const seed = (hashString(`${name}|${color}|${favoriteNumber}`) ^ (favoriteNumber * 2654435761)) >>> 0;
+  return generateConstellationFromSeed(seed, color);
 }

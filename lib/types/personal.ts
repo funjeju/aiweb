@@ -86,12 +86,20 @@ export interface PersonalSchema {
     galleryImages?: string[];
     galleryItems?: GalleryItem[];
     selectedAssets?: string[];
-    /** BGM 설정 */
+    /** 별자리 시드 — 최초 생성 시 한 번 저장, 이후 고정 */
+    constellationSeed?: number;
+    /** BGM 설정 (단일, 구버전 호환용) */
     bgm?: {
       url: string;
       name: string;
       autoPlay?: boolean;
     };
+    /** BGM 목록 (최대 3개) */
+    bgmList?: Array<{
+      url: string;
+      name: string;
+      autoPlay?: boolean;
+    }>;
     /** 메뉴 노드 위치 커스텀 (key=menu.id) */
     menuLayout?: Record<string, { top: string; left: string }>;
     /** 에셋 위치 커스텀 (key=asset.id) */

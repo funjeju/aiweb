@@ -7,7 +7,7 @@ import { StarfieldCanvas } from "./StarfieldCanvas";
 import { ConstellationPreview } from "./ConstellationPreview";
 import { FloatingAssets } from "./FloatingAssets";
 import { UniverseSettings } from "./UniverseSettings";
-import { generateConstellation } from "@/lib/universe/stars";
+import { generateConstellation, generateConstellationFromSeed } from "@/lib/universe/stars";
 import { getPublishedUniverses, updatePersonal } from "@/lib/firebase/personals";
 import { uploadPersonalImage } from "@/lib/firebase/storage";
 import { useAuthStore } from "@/lib/store/authStore";
@@ -29,10 +29,13 @@ import { cn } from "@/lib/utils";
 
 export interface UniverseMenu { id: string; label: string; icon: UniverseIconType; }
 
+export interface BgmTrack { url: string; name: string; autoPlay?: boolean; }
+
 export interface UniverseData {
   name: string;
   color: string;
   favoriteNumber: number;
+  constellationSeed?: number;
   menus: UniverseMenu[];
   about?: string;
   style?: UniverseStyle;
@@ -42,7 +45,7 @@ export interface UniverseData {
   socials?: { github?: string; instagram?: string; linkedin?: string; twitter?: string; website?: string; email?: string; };
   galleryItems?: GalleryItem[];
   selectedAssets?: string[];
-  bgm?: { url: string; name: string; autoPlay?: boolean };
+  bgmList?: BgmTrack[];
   menuLayout?: Record<string, { top: string; left: string }>;
   assetPositions?: Record<string, { top: string; left: string }>;
   ownerId?: string;
@@ -315,22 +318,37 @@ function NeighborModal({ onClose, fromId }: { onClose: () => void; fromId?: stri
   );
 }
 
-/* ─── BGM 플레이어 버튼 (오디오는 UniverseHome에서 단일 관리) ── */
+/* ─── BGM 플레이어 버튼 (다중 트랙) ─────────────── */
 
-function BgmPlayerButton({ bgm, color, playing, onToggle }: {
-  bgm: NonNullable<UniverseData["bgm"]>;
+function BgmPlayerButton({ tracks, trackIdx, color, playing, onToggle, onPrev, onNext }: {
+  tracks: BgmTrack[];
+  trackIdx: number;
   color: string;
   playing: boolean;
   onToggle: () => void;
+  onPrev: () => void;
+  onNext: () => void;
 }) {
+  const track = tracks[trackIdx];
+  if (!track) return null;
   return (
-    <button onClick={onToggle}
-      className="flex items-center gap-2 px-3 py-2 rounded-full backdrop-blur-sm border text-white/70 text-xs hover:text-white transition-colors"
-      style={{ backgroundColor: `${color}15`, borderColor: `${color}40` }}
-      title={bgm.name}>
-      {playing ? <Pause size={13} /> : <Play size={13} />}
-      <span className="max-w-[100px] truncate">{bgm.name}</span>
-    </button>
+    <div className="flex items-center gap-1 px-2 py-1.5 rounded-full backdrop-blur-sm border text-white/70 text-xs"
+      style={{ backgroundColor: `${color}15`, borderColor: `${color}40` }}>
+      {tracks.length > 1 && (
+        <button onClick={onPrev} className="p-0.5 hover:text-white transition-colors" title="이전 트랙">
+          <ChevronLeft size={12} />
+        </button>
+      )}
+      <button onClick={onToggle} className="p-0.5 hover:text-white transition-colors" title={track.name}>
+        {playing ? <Pause size={13} /> : <Play size={13} />}
+      </button>
+      <span className="max-w-[90px] truncate mx-1">{track.name}</span>
+      {tracks.length > 1 && (
+        <button onClick={onNext} className="p-0.5 hover:text-white transition-colors" title="다음 트랙">
+          <ChevronRight size={12} />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -345,7 +363,10 @@ const UI = {
 
 export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   const [data, setData] = useState(initialData);
-  const constellation = generateConstellation(data.name, data.color, data.favoriteNumber);
+  // DB에 시드가 저장돼 있으면 그걸 그대로 사용 (불변) — 없으면 name+color+number로 생성 (구버전 호환)
+  const constellation = data.constellationSeed != null
+    ? generateConstellationFromSeed(data.constellationSeed, data.color)
+    : generateConstellation(data.name, data.color, data.favoriteNumber);
   const [openMenu, setOpenMenu] = useState<UniverseMenu | null>(null);
   const [showNeighbors, setShowNeighbors] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -354,41 +375,60 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
 
   const { user } = useAuthStore();
 
-  // ── 단일 오디오 인스턴스 (BGM) ──────────────────
+  // ── BGM 다중 트랙 관리 ──────────────────────────
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [bgmPlaying, setBgmPlaying] = useState(false);
+  const [trackIdx, setTrackIdx] = useState(0);
+
+  const bgmList = data.bgmList ?? [];
+  const currentTrack = bgmList[trackIdx] ?? null;
 
   useEffect(() => {
-    const bgm = data.bgm;
-    if (!bgm?.url) { audioRef.current?.pause(); audioRef.current = null; setBgmPlaying(false); return; }
-    // URL이 바뀐 경우만 새 Audio 생성
-    if (audioRef.current && audioRef.current.src !== bgm.url) {
+    if (!currentTrack?.url) {
+      audioRef.current?.pause();
+      audioRef.current = null;
+      setBgmPlaying(false);
+      return;
+    }
+    if (audioRef.current && audioRef.current.src !== currentTrack.url) {
       audioRef.current.pause();
       audioRef.current.src = "";
       audioRef.current = null;
       setBgmPlaying(false);
     }
     if (!audioRef.current) {
-      const audio = new Audio(bgm.url);
+      const audio = new Audio(currentTrack.url);
       audio.loop = true;
       audioRef.current = audio;
     }
-    if (bgm.autoPlay) {
+    if (currentTrack.autoPlay) {
       audioRef.current.play().then(() => setBgmPlaying(true)).catch(() => {});
     }
-    return () => {
-      // 언마운트 시 정리
-      audioRef.current?.pause();
-    };
-  // data.bgm.url이 바뀔 때만 재실행
+    return () => { audioRef.current?.pause(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.bgm?.url, data.bgm?.autoPlay]);
+  }, [currentTrack?.url, currentTrack?.autoPlay]);
 
   const toggleBgm = () => {
     const audio = audioRef.current;
     if (!audio) return;
     if (bgmPlaying) { audio.pause(); setBgmPlaying(false); }
     else { audio.play().then(() => setBgmPlaying(true)).catch(() => {}); }
+  };
+
+  const prevTrack = () => {
+    if (bgmList.length < 2) return;
+    setTrackIdx((i) => (i - 1 + bgmList.length) % bgmList.length);
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setBgmPlaying(false);
+  };
+
+  const nextTrack = () => {
+    if (bgmList.length < 2) return;
+    setTrackIdx((i) => (i + 1) % bgmList.length);
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setBgmPlaying(false);
   };
   const isOwner = !!user && !!data.ownerId && user.uid === data.ownerId;
 
@@ -419,14 +459,16 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   const style = data.style ?? {};
 
   // 설정 저장 후 로컬 상태 갱신
-  const handleSettingsSaved = (state: { selectedAssets: string[]; bgm: { url: string; name: string; autoPlay: boolean } | null; menuLayout: Record<string, { top: string; left: string }>; assetPositions: Record<string, { top: string; left: string }> }) => {
+  const handleSettingsSaved = (state: { selectedAssets: string[]; bgmList: BgmTrack[]; menuLayout: Record<string, { top: string; left: string }>; assetPositions: Record<string, { top: string; left: string }> }) => {
     setData((prev) => ({
       ...prev,
       selectedAssets: state.selectedAssets,
-      bgm: state.bgm ?? undefined,
+      bgmList: state.bgmList,
       menuLayout: Object.keys(state.menuLayout).length > 0 ? state.menuLayout : undefined,
       assetPositions: Object.keys(state.assetPositions).length > 0 ? state.assetPositions : undefined,
     }));
+    // 트랙이 줄었으면 인덱스 보정
+    setTrackIdx((i) => Math.min(i, Math.max(0, state.bgmList.length - 1)));
   };
 
   // 메뉴 노드 위치: menuLayout 있으면 우선, 없으면 DEFAULT_POS
@@ -498,7 +540,17 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
 
       {/* 하단 액션 + BGM 플레이어 */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
-        {data.bgm && <BgmPlayerButton bgm={data.bgm} color={data.color} playing={bgmPlaying} onToggle={toggleBgm} />}
+        {bgmList.length > 0 && (
+          <BgmPlayerButton
+            tracks={bgmList}
+            trackIdx={trackIdx}
+            color={data.color}
+            playing={bgmPlaying}
+            onToggle={toggleBgm}
+            onPrev={prevTrack}
+            onNext={nextTrack}
+          />
+        )}
         <button className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold text-white backdrop-blur-sm border"
           style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}66` }}
           onClick={() => setShowNeighbors(true)}>
@@ -533,7 +585,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           personalId={data.personalId}
           menus={data.menus ?? []}
           initialAssets={data.selectedAssets ?? []}
-          initialBgm={data.bgm}
+          initialBgmList={bgmList}
           initialLayout={data.menuLayout}
           initialAssetPositions={data.assetPositions}
           allAssets={DEFAULT_ASSETS}

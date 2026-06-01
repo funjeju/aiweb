@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ArrowLeft, Sparkles, Loader2, Check, X, Link as LinkIcon } from "lucide-react";
 import { ConstellationPreview } from "@/components/universe/ConstellationPreview";
+import { generateConstellation } from "@/lib/universe/stars";
 
 const COLOR_PRESETS = ["#a78bfa", "#60a5fa", "#f472b6", "#34d399", "#fbbf24", "#f87171", "#22d3ee", "#c084fc"];
 const PUBLIC_DOMAIN = process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "study.funjeju.com";
@@ -92,6 +93,7 @@ export default function UniverseCreatePage() {
         universe: {
           color,
           favoriteNumber: Number(favoriteNumber) || 7,
+          constellationSeed: generateConstellation(name, color, Number(favoriteNumber) || 7).seed,
           menus: [
             { id: "profile", label: "내 소개", icon: "profile" },
             { id: "diary",   label: "다이어리", icon: "diary" },
