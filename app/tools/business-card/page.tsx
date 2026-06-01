@@ -42,7 +42,7 @@ export default function BusinessCardTrialPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200 px-5 h-14 flex items-center gap-3">
-        <Link href="/" className="p-1.5 hover:bg-gray-100 rounded-lg"><ArrowLeft size={20} className="text-gray-600" /></Link>
+        <Link href="/local" className="p-1.5 hover:bg-gray-100 rounded-lg"><ArrowLeft size={20} className="text-gray-600" /></Link>
         <div className="flex-1">
           <h1 className="font-bold text-gray-900 text-sm">디지털 명함 만들기</h1>
         </div>
