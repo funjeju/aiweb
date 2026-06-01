@@ -55,9 +55,9 @@ export function PersonalSite({ data: original }: { data: PersonalSchema }) {
 
   // Contact 섹션 UI 텍스트 번역
   const t = {
-    contactTitle:   lang === "en" ? "Let's Talk"       : lang === "zh" ? "联系我" : "함께 이야기해요",
-    viewProjects:   lang === "en" ? "View Projects"    : lang === "zh" ? "查看项目" : "프로젝트 보기",
-    contactMe:      lang === "en" ? "Contact"          : lang === "zh" ? "联系" : "연락하기",
+    contactTitle:   lang === "en" ? "Let's Talk"    : "함께 이야기해요",
+    viewProjects:   lang === "en" ? "View Projects" : "프로젝트 보기",
+    contactMe:      lang === "en" ? "Contact"       : "연락하기",
   };
 
   return (
@@ -109,7 +109,7 @@ export function PersonalSite({ data: original }: { data: PersonalSchema }) {
         <Link href={`/private/edit/${data.id}`}
           className="fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-full text-white font-semibold shadow-lg"
           style={{ backgroundColor: theme.primary }}>
-          <Pencil size={16} />{lang === "en" ? "Edit" : lang === "zh" ? "编辑" : "편집"}
+          <Pencil size={16} />{lang === "en" ? "Edit" : "편집"}
         </Link>
       )}
     </div>

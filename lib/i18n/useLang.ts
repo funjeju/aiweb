@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-export type Lang = "ko" | "en" | "zh";
+export type Lang = "ko" | "en";
 const STORAGE_KEY = "aiweb_lang";
-const VALID: Lang[] = ["ko", "en", "zh"];
+const VALID: Lang[] = ["ko", "en"];
 
 export function useLang() {
   const [lang, setLangState] = useState<Lang>("ko");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { updatePersonal } from "@/lib/firebase/personals";
 import { uploadPersonalAudio } from "@/lib/firebase/storage";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
@@ -183,19 +183,42 @@ function LayoutTab({
 function BgmTab({
   personalId,
   bgmList,
-  bgmPlaying,
-  onToggleBgm,
   onChange,
 }: {
   personalId: string;
   bgmList: BgmTrack[];
-  bgmPlaying: boolean;
-  onToggleBgm: () => void;
   onChange: (list: BgmTrack[]) => void;
 }) {
   const [uploading, setUploading] = useState(false);
+  // 설정 패널 내 독립 프리뷰 오디오 (메인 플레이어와 무관)
+  const previewRef = useRef<HTMLAudioElement | null>(null);
+  const [previewIdx, setPreviewIdx] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const MAX = 3;
+
+  // 패널 닫힐 때 프리뷰 정리
+  useEffect(() => {
+    return () => { previewRef.current?.pause(); previewRef.current = null; };
+  }, []);
+
+  const togglePreview = (idx: number) => {
+    // 같은 트랙 누르면 정지
+    if (previewIdx === idx) {
+      previewRef.current?.pause();
+      previewRef.current = null;
+      setPreviewIdx(null);
+      return;
+    }
+    // 다른 트랙: 기존 정지 후 새로 재생
+    previewRef.current?.pause();
+    previewRef.current = null;
+    const audio = new Audio(bgmList[idx].url);
+    audio.loop = false;
+    audio.onended = () => setPreviewIdx(null);
+    previewRef.current = audio;
+    audio.play().catch(() => {});
+    setPreviewIdx(idx);
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -213,7 +236,10 @@ function BgmTab({
     }
   };
 
-  const remove = (idx: number) => onChange(bgmList.filter((_, i) => i !== idx));
+  const remove = (idx: number) => {
+    if (previewIdx === idx) { previewRef.current?.pause(); previewRef.current = null; setPreviewIdx(null); }
+    onChange(bgmList.filter((_, i) => i !== idx));
+  };
 
   const toggleAutoPlay = (idx: number) =>
     onChange(bgmList.map((t, i) => i === idx ? { ...t, autoPlay: !t.autoPlay } : t));
@@ -231,10 +257,10 @@ function BgmTab({
           {bgmList.map((track, i) => (
             <div key={track.url + i} className="rounded-2xl bg-white/5 border border-white/10 p-3 space-y-2">
               <div className="flex items-center gap-3">
-                {/* 재생/일시정지: 첫 번째 트랙만 실제 오디오 제어 (현재 구조상) */}
-                <button onClick={onToggleBgm}
+                {/* 트랙별 독립 프리뷰 버튼 */}
+                <button onClick={() => togglePreview(i)}
                   className="w-9 h-9 rounded-full bg-violet-500/30 border border-violet-400/50 flex items-center justify-center text-white hover:bg-violet-500/50 transition-colors shrink-0">
-                  {i === 0 && bgmPlaying ? <Pause size={14} /> : <Play size={14} />}
+                  {previewIdx === i ? <Pause size={14} /> : <Play size={14} />}
                 </button>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{track.name}</p>
@@ -427,8 +453,6 @@ export function UniverseSettings({
             <BgmTab
               personalId={personalId}
               bgmList={state.bgmList}
-              bgmPlaying={bgmPlaying}
-              onToggleBgm={onToggleBgm}
               onChange={(bgmList) => setState((p) => ({ ...p, bgmList }))}
             />
           )}

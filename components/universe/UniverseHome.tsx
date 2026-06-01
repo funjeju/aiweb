@@ -358,8 +358,13 @@ function BgmPlayerButton({ tracks, trackIdx, color, playing, onToggle, onPrev, o
 const UI = {
   ko: { constellationOf: "Constellation of", suffix: "님의 별자리", neighbor: "랜덤 이웃 구경", backTo: "내 우주로", settings: "설정" },
   en: { constellationOf: "Constellation of", suffix: "'s Universe",  neighbor: "Visit Neighbors",  backTo: "My Universe", settings: "Settings" },
-  zh: { constellationOf: "属于",               suffix: "的宇宙",        neighbor: "随机邻居",          backTo: "我的宇宙",  settings: "设置" },
 } as const;
+
+const DEFAULT_MENUS: UniverseMenu[] = [
+  { id: "profile", label: "내 소개",  icon: "profile" },
+  { id: "diary",   label: "다이어리", icon: "diary"   },
+  { id: "gallery", label: "갤러리",   icon: "gallery" },
+];
 
 export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   const [data, setData] = useState(initialData);
@@ -431,6 +436,17 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
     setBgmPlaying(false);
   };
   const isOwner = !!user && !!data.ownerId && user.uid === data.ownerId;
+
+  // menus가 DB에 없는 경우(구버전 계정) 기본값으로 자동 복구
+  useEffect(() => {
+    if (isOwner && data.personalId && (!data.menus || data.menus.length === 0)) {
+      setData((prev) => ({ ...prev, menus: DEFAULT_MENUS }));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      updatePersonal(data.personalId, { "universe.menus": DEFAULT_MENUS } as any).catch(console.error);
+    }
+  // 마운트 시 한 번만
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, data.personalId]);
 
   // 다국어
   const { lang, setLang } = useLang();
