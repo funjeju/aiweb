@@ -24,6 +24,7 @@ import {
   Github, Instagram, Linkedin, Globe, Mail,
   ChevronLeft, ChevronRight, Pencil, Plus, Check, Settings,
   Play, Pause, LogIn, Send, Lock, MessageCircle, PenLine, Trash2,
+  Calendar, Search,
 } from "lucide-react";
 import type { DiaryEntry, DiaryEmotion } from "@/lib/types/personal";
 import { cn } from "@/lib/utils";
@@ -407,9 +408,17 @@ const EMOTION_META: Record<DiaryEmotion, { emoji: string; label: string }> = {
   neutral:  { emoji: "🌙", label: "평범" },
 };
 
-type DiaryView = "list" | "write";
+type DiaryView = "list" | "write" | "calendar";
 type WriteMode = "text" | "chat";
 interface ChatMsg { role: "ai" | "user"; text: string }
+
+const DIARY_PAGE_SIZE = 5;
+const FEATURED_LIMIT = 100; // 최신글 미리보기 글자수
+
+function truncate(s: string, n: number) {
+  const flat = s.replace(/\s+/g, " ").trim();
+  return flat.length > n ? flat.slice(0, n).trimEnd() + "…" : flat;
+}
 
 function DiaryPanel({ data, isOwner, onSaved }: {
   data: UniverseData;
@@ -419,14 +428,33 @@ function DiaryPanel({ data, isOwner, onSaved }: {
   const [entries, setEntries] = useState<DiaryEntry[]>(data.diaryEntries ?? []);
   const [view, setView] = useState<DiaryView>("list");
   const [mode, setMode] = useState<WriteMode>("text");
-  const sitePublic = data.published !== false; // 사이트 비공개면 항목 공개 불가
+  const [page, setPage] = useState(0);
+  const [dateQuery, setDateQuery] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [modalEntries, setModalEntries] = useState<DiaryEntry[] | null>(null);
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const sitePublic = data.published !== false;
 
   // 사이트가 공개일 때만 비소유자에게 공개 항목 노출
-  const visibleEntries = isOwner
-    ? entries
-    : sitePublic
-      ? entries.filter((e) => e.isPublic)
-      : [];
+  const visibleEntries = isOwner ? entries : sitePublic ? entries.filter((e) => e.isPublic) : [];
+
+  // 최신순 정렬
+  const sorted = [...visibleEntries].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+
+  // 검색 필터 (날짜 + 키워드)
+  const filtered = sorted.filter((e) => {
+    if (dateQuery && e.date !== dateQuery) return false;
+    if (keyword && !e.content.toLowerCase().includes(keyword.toLowerCase())) return false;
+    return true;
+  });
+
+  // 날짜별 그룹 (캘린더용)
+  const byDate = new Map<string, DiaryEntry[]>();
+  for (const e of visibleEntries) {
+    const arr = byDate.get(e.date) ?? [];
+    arr.push(e);
+    byDate.set(e.date, arr);
+  }
 
   const saveToDb = async (updated: DiaryEntry[]) => {
     setEntries(updated);
@@ -439,7 +467,14 @@ function DiaryPanel({ data, isOwner, onSaved }: {
 
   const deleteEntry = async (id: string) => {
     if (!confirm("이 일기를 삭제할까요?")) return;
-    await saveToDb(entries.filter((e) => e.id !== id));
+    const updated = entries.filter((e) => e.id !== id);
+    await saveToDb(updated);
+    // 모달 갱신 (남은 항목 없으면 닫기)
+    setModalEntries((prev) => {
+      if (!prev) return prev;
+      const next = prev.filter((e) => e.id !== id);
+      return next.length ? next : null;
+    });
   };
 
   if (view === "write" && isOwner) {
@@ -451,55 +486,222 @@ function DiaryPanel({ data, isOwner, onSaved }: {
         onCancel={() => setView("list")}
         onSave={async (entry) => {
           await saveToDb([entry, ...entries]);
+          setPage(0);
           setView("list");
         }}
       />
     );
   }
 
+  const featured = filtered[0] ?? null;
+  const rest = filtered.slice(1);
+  const totalPages = Math.ceil(rest.length / DIARY_PAGE_SIZE);
+  const pageItems = rest.slice(page * DIARY_PAGE_SIZE, page * DIARY_PAGE_SIZE + DIARY_PAGE_SIZE);
+  const searching = !!(dateQuery || keyword);
+
   return (
     <div className="space-y-3">
-      {/* 작성 버튼 (소유자) */}
-      {isOwner && (
-        <button onClick={() => { setMode("text"); setView("write"); }}
-          className="w-full py-3 rounded-xl bg-violet-500 text-white text-sm font-bold hover:bg-violet-600 flex items-center justify-center gap-2 transition-colors">
-          <PenLine size={15} />오늘 일기 쓰기
+      {/* 상단 바: 작성 + 캘린더 토글 */}
+      <div className="flex items-center gap-2">
+        {isOwner && view !== "calendar" && (
+          <button onClick={() => { setMode("text"); setView("write"); }}
+            className="flex-1 py-2.5 rounded-xl bg-violet-500 text-white text-sm font-bold hover:bg-violet-600 flex items-center justify-center gap-2 transition-colors">
+            <PenLine size={14} />오늘 일기 쓰기
+          </button>
+        )}
+        <button onClick={() => setView(view === "calendar" ? "list" : "calendar")}
+          className={cn("px-3 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors border",
+            view === "calendar" ? "bg-violet-500 text-white border-violet-500" : "bg-white/5 text-white/60 border-white/10 hover:bg-white/10",
+            !isOwner && view !== "calendar" && "flex-1")}>
+          {view === "calendar" ? <><BookOpen size={14} />목록</> : <><Calendar size={14} />캘린더</>}
         </button>
+      </div>
+
+      {/* ── 캘린더 뷰 ── */}
+      {view === "calendar" ? (
+        <DiaryCalendar month={calMonth} setMonth={setCalMonth} byDate={byDate} onPick={(es) => setModalEntries(es)} />
+      ) : (
+        <>
+          {/* 검색 */}
+          {visibleEntries.length > 0 && (
+            <div className="flex items-center gap-2">
+              <input type="date" value={dateQuery} onChange={(e) => { setDateQuery(e.target.value); setPage(0); }}
+                className="px-2.5 py-2 rounded-lg bg-white/8 border border-white/15 text-xs text-white/80 focus:border-violet-400 focus:outline-none" />
+              <div className="flex-1 flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-white/8 border border-white/15 focus-within:border-violet-400">
+                <Search size={12} className="text-white/30 shrink-0" />
+                <input type="text" value={keyword} onChange={(e) => { setKeyword(e.target.value); setPage(0); }}
+                  placeholder="키워드 검색"
+                  className="flex-1 min-w-0 bg-transparent text-xs text-white placeholder-white/25 focus:outline-none" />
+              </div>
+              {searching && (
+                <button onClick={() => { setDateQuery(""); setKeyword(""); setPage(0); }}
+                  className="text-xs text-white/40 hover:text-white/70 shrink-0">초기화</button>
+              )}
+            </div>
+          )}
+
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center py-8 text-white/30 text-sm gap-2">
+              <BookOpen size={28} />
+              {searching ? "검색 결과가 없어요." : isOwner ? "첫 일기를 남겨보세요." : "아직 공개된 일기가 없어요."}
+            </div>
+          ) : (
+            <>
+              {/* 최신글 — 전체(100자) + 더보기 */}
+              {featured && (() => {
+                const em = EMOTION_META[featured.emotion ?? "neutral"];
+                const long = featured.content.replace(/\s+/g, " ").trim().length > FEATURED_LIMIT;
+                return (
+                  <div className="rounded-2xl bg-white/5 border border-white/10 p-3.5">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-base">{em.emoji}</span>
+                      <span className="text-xs text-white/40">{featured.date}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50">{em.label}</span>
+                      {featured.mode === "chat" && <MessageCircle size={11} className="text-white/30" />}
+                      {isOwner && (
+                        <span className="ml-auto flex items-center gap-1.5">
+                          {featured.isPublic ? <Globe size={11} className="text-green-400/70" /> : <Lock size={11} className="text-white/30" />}
+                          <button onClick={() => deleteEntry(featured.id)} className="text-white/20 hover:text-red-400"><Trash2 size={12} /></button>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-white/75 text-sm leading-relaxed">{truncate(featured.content, FEATURED_LIMIT)}</p>
+                    {long && (
+                      <button onClick={() => setModalEntries([featured])} className="mt-1.5 text-xs font-semibold" style={{ color: data.color }}>
+                        더보기
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* 나머지 — 한 줄 미리보기 */}
+              {pageItems.map((e) => {
+                const em = EMOTION_META[e.emotion ?? "neutral"];
+                return (
+                  <button key={e.id} onClick={() => setModalEntries([e])}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/8 transition-colors text-left">
+                    <span className="text-sm shrink-0">{em.emoji}</span>
+                    <span className="text-[10px] text-white/35 shrink-0 w-[68px]">{e.date}</span>
+                    <span className="text-xs text-white/70 truncate flex-1">{truncate(e.content, 60)}</span>
+                  </button>
+                );
+              })}
+
+              {/* 페이지네이션 */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-3 pt-1">
+                  <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+                    className="p-1.5 rounded-lg bg-white/5 text-white/50 disabled:opacity-30 hover:bg-white/10"><ChevronLeft size={14} /></button>
+                  <span className="text-xs text-white/40">{page + 1} / {totalPages}</span>
+                  <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+                    className="p-1.5 rounded-lg bg-white/5 text-white/50 disabled:opacity-30 hover:bg-white/10"><ChevronRight size={14} /></button>
+                </div>
+              )}
+            </>
+          )}
+        </>
       )}
 
-      {visibleEntries.length === 0 ? (
-        <div className="flex flex-col items-center py-8 text-white/30 text-sm gap-2">
-          <BookOpen size={28} />
-          {isOwner ? "첫 일기를 남겨보세요." : "아직 공개된 일기가 없어요."}
+      {/* 상세 모달 (더보기 / 캘린더 날짜 클릭) */}
+      {modalEntries && (
+        <DiaryDetailModal entries={modalEntries} isOwner={isOwner} color={data.color}
+          onClose={() => setModalEntries(null)} onDelete={deleteEntry} />
+      )}
+    </div>
+  );
+}
+
+/* ─── 다이어리 캘린더 ─────────────────────────── */
+
+function DiaryCalendar({ month, setMonth, byDate, onPick }: {
+  month: Date;
+  setMonth: (d: Date) => void;
+  byDate: Map<string, DiaryEntry[]>;
+  onPick: (entries: DiaryEntry[]) => void;
+}) {
+  const year = month.getFullYear();
+  const m = month.getMonth();
+  const startDay = new Date(year, m, 1).getDay();
+  const daysInMonth = new Date(year, m + 1, 0).getDate();
+  const fmt = (d: number) => `${year}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < startDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between px-1">
+        <button onClick={() => setMonth(new Date(year, m - 1, 1))} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60"><ChevronLeft size={16} /></button>
+        <span className="text-sm font-semibold text-white">{year}년 {m + 1}월</span>
+        <button onClick={() => setMonth(new Date(year, m + 1, 1))} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60"><ChevronRight size={16} /></button>
+      </div>
+      <div className="grid grid-cols-7 text-center text-[10px] text-white/30 mb-0.5">
+        {["일", "월", "화", "수", "목", "금", "토"].map((w) => <div key={w}>{w}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((d, i) => {
+          if (d === null) return <div key={i} />;
+          const es = byDate.get(fmt(d));
+          const has = !!es && es.length > 0;
+          const em = has ? EMOTION_META[es![0].emotion ?? "neutral"] : null;
+          return (
+            <button key={i} disabled={!has} onClick={() => has && onPick(es!)}
+              className={cn("aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 transition-colors",
+                has ? "bg-violet-500/20 border border-violet-400/40 hover:bg-violet-500/35 cursor-pointer" : "cursor-default")}>
+              <span className={cn("text-[10px] leading-none", has ? "text-white/80" : "text-white/25")}>{d}</span>
+              {em && <span className="text-[11px] leading-none">{em.emoji}</span>}
+              {has && es!.length > 1 && <span className="text-[7px] text-white/40 leading-none">{es!.length}</span>}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-white/25 text-center pt-1">일기가 있는 날을 누르면 내용이 보여요.</p>
+    </div>
+  );
+}
+
+/* ─── 다이어리 상세 모달 ──────────────────────── */
+
+function DiaryDetailModal({ entries, isOwner, color, onClose, onDelete }: {
+  entries: DiaryEntry[];
+  isOwner: boolean;
+  color: string;
+  onClose: () => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-[55] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full sm:max-w-md bg-[#0b1026] border border-white/10 rounded-t-3xl sm:rounded-3xl p-6 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4 sticky top-0">
+          <h3 className="text-white font-bold text-base flex items-center gap-2">
+            <span style={{ color }}>✦</span>{entries[0].date}
+          </h3>
+          <button onClick={onClose} className="text-white/50 hover:text-white"><X size={20} /></button>
         </div>
-      ) : (
-        <div className="space-y-2.5">
-          {visibleEntries.map((e) => {
+        <div className="space-y-5">
+          {entries.map((e) => {
             const em = EMOTION_META[e.emotion ?? "neutral"];
             return (
-              <div key={e.id} className="rounded-2xl bg-white/5 border border-white/10 p-3.5">
-                <div className="flex items-center gap-2 mb-1.5">
+              <div key={e.id}>
+                <div className="flex items-center gap-2 mb-2">
                   <span className="text-base">{em.emoji}</span>
-                  <span className="text-xs text-white/40">{e.date}</span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50">{em.label}</span>
                   {e.mode === "chat" && <MessageCircle size={11} className="text-white/30" />}
                   {isOwner && (
                     <span className="ml-auto flex items-center gap-1.5">
-                      {e.isPublic
-                        ? <Globe size={11} className="text-green-400/70" />
-                        : <Lock size={11} className="text-white/30" />}
-                      <button onClick={() => deleteEntry(e.id)} className="text-white/20 hover:text-red-400 transition-colors">
-                        <Trash2 size={12} />
-                      </button>
+                      {e.isPublic ? <Globe size={11} className="text-green-400/70" /> : <Lock size={11} className="text-white/30" />}
+                      <button onClick={() => onDelete(e.id)} className="text-white/20 hover:text-red-400"><Trash2 size={13} /></button>
                     </span>
                   )}
                 </div>
-                <p className="text-white/75 text-sm leading-relaxed whitespace-pre-wrap">{e.content}</p>
+                <p className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">{e.content}</p>
               </div>
             );
           })}
         </div>
-      )}
+      </div>
     </div>
   );
 }
