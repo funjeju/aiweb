@@ -66,9 +66,12 @@ const DEFAULT_POS = [
 
 /* ─── 내 소개 패널 ─────────────────────────────── */
 
-function ProfilePanel({ data, isOwner }: { data: UniverseData; isOwner: boolean }) {
+function ProfilePanel({ data, isOwner, onSaved }: {
+  data: UniverseData;
+  isOwner: boolean;
+  onSaved: (u: { role: string; tagline: string; about: string; photo?: string }) => void;
+}) {
   const [editing, setEditing] = useState(false);
-  // 저장 후에도 뷰에서 최신값이 보이도록 로컬 카피 유지
   const [local, setLocal] = useState({
     role: data.role ?? "",
     tagline: data.tagline ?? "",
@@ -89,7 +92,6 @@ function ProfilePanel({ data, isOwner }: { data: UniverseData; isOwner: boolean 
     if (!data.personalId) return;
     setSaving(true);
     try {
-      // dot-notation: profile 객체 전체 교체 방지
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await updatePersonal(data.personalId, {
         "profile.role": form.role,
@@ -97,7 +99,9 @@ function ProfilePanel({ data, isOwner }: { data: UniverseData; isOwner: boolean 
         "profile.bio": form.about,
         about: form.about,
       } as any);
-      setLocal((p) => ({ ...p, role: form.role, tagline: form.tagline, about: form.about }));
+      const next = { role: form.role, tagline: form.tagline, about: form.about, photo: local.photo };
+      setLocal((p) => ({ ...p, ...next }));
+      onSaved(next);           // 부모 state 갱신
       setEditing(false);
     } finally { setSaving(false); }
   };
@@ -111,6 +115,7 @@ function ProfilePanel({ data, isOwner }: { data: UniverseData; isOwner: boolean 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await updatePersonal(data.personalId, { "profile.photo": url } as any);
       setLocal((p) => ({ ...p, photo: url }));
+      onSaved({ role: local.role, tagline: local.tagline, about: local.about, photo: url });
     } catch { alert("사진 업로드에 실패했습니다."); }
     finally { setUploadingPhoto(false); e.target.value = ""; }
   };
@@ -215,7 +220,11 @@ function SocialLink({ href, icon, label }: { href: string; icon: React.ReactNode
 
 /* ─── 갤러리 패널 ──────────────────────────────── */
 
-function GalleryPanel({ data, isOwner }: { data: UniverseData; isOwner: boolean }) {
+function GalleryPanel({ data, isOwner, onSaved }: {
+  data: UniverseData;
+  isOwner: boolean;
+  onSaved: (items: GalleryItem[]) => void;
+}) {
   const [items, setItems] = useState<GalleryItem[]>(data.galleryItems ?? []);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -228,6 +237,7 @@ function GalleryPanel({ data, isOwner }: { data: UniverseData; isOwner: boolean 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await updatePersonal(data.personalId, { "universe.galleryItems": updated } as any);
+      onSaved(updated);        // 부모 state 갱신
     } finally { setSaving(false); }
   };
 
@@ -263,42 +273,38 @@ function GalleryPanel({ data, isOwner }: { data: UniverseData; isOwner: boolean 
 
   return (
     <>
-      <div className="grid grid-cols-3 gap-1.5">
-        {items.map((item, i) => (
-          <div key={item.url} className="relative aspect-square rounded-xl overflow-hidden group">
-            <button onClick={() => setLightboxIdx(i)} className="w-full h-full">
-              <Image src={item.url} alt="" width={120} height={120} className="w-full h-full object-cover" />
-            </button>
-            {/* 삭제 버튼 */}
-            {isOwner && (
-              <button onClick={() => deleteItem(i)}
-                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80">
-                <X size={10} className="text-white" />
+      {/* 빈 상태: 버튼 하나만 */}
+      {items.length === 0 && isOwner ? (
+        <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+          className="w-full py-10 border-2 border-dashed border-white/15 rounded-2xl flex flex-col items-center gap-2 text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
+          {uploading ? <Loader2 size={24} className="animate-spin" /> : <Plus size={24} />}
+          <span className="text-sm">사진 추가하기</span>
+        </button>
+      ) : (
+        <div className="grid grid-cols-3 gap-1.5">
+          {items.map((item, i) => (
+            <div key={item.url} className="relative aspect-square rounded-xl overflow-hidden group">
+              <button onClick={() => setLightboxIdx(i)} className="w-full h-full">
+                <Image src={item.url} alt="" width={120} height={120} className="w-full h-full object-cover" />
               </button>
-            )}
-          </div>
-        ))}
-
-        {/* 업로드 추가 버튼 */}
-        {isOwner && (
-          <button onClick={() => fileInputRef.current?.click()} disabled={uploading || saving}
-            className="aspect-square rounded-xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
-            {uploading
-              ? <Loader2 size={18} className="animate-spin" />
-              : saving
+              {isOwner && (
+                <button onClick={() => deleteItem(i)}
+                  className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/80">
+                  <X size={10} className="text-white" />
+                </button>
+              )}
+            </div>
+          ))}
+          {/* 이미지가 있을 때 추가 버튼 */}
+          {isOwner && (
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading || saving}
+              className="aspect-square rounded-xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
+              {uploading || saving
                 ? <Loader2 size={18} className="animate-spin text-violet-400" />
                 : <><Plus size={20} /><span className="text-[10px] mt-1">추가</span></>}
-          </button>
-        )}
-      </div>
-
-      {/* 빈 상태 업로드 버튼 */}
-      {isOwner && items.length === 0 && (
-        <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-          className="w-full mt-2 py-6 border-2 border-dashed border-white/15 rounded-xl flex flex-col items-center gap-2 text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors">
-          {uploading ? <Loader2 size={22} className="animate-spin" /> : <Plus size={22} />}
-          <span className="text-xs">사진 추가하기</span>
-        </button>
+            </button>
+          )}
+        </div>
       )}
 
       <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
@@ -321,10 +327,21 @@ function GalleryPanel({ data, isOwner }: { data: UniverseData; isOwner: boolean 
 
 /* ─── 메뉴 콘텐츠 ──────────────────────────────── */
 
-function MenuContent({ menu, data, isOwner }: { menu: UniverseMenu; data: UniverseData; isOwner: boolean }) {
+function MenuContent({ menu, data, isOwner, onDataUpdate }: {
+  menu: UniverseMenu;
+  data: UniverseData;
+  isOwner: boolean;
+  onDataUpdate: (u: Partial<UniverseData>) => void;
+}) {
   switch (menu.icon) {
-    case "profile": return <ProfilePanel data={data} isOwner={isOwner} />;
-    case "gallery": return <GalleryPanel data={data} isOwner={isOwner} />;
+    case "profile": return (
+      <ProfilePanel data={data} isOwner={isOwner}
+        onSaved={(u) => onDataUpdate({ role: u.role, tagline: u.tagline, about: u.about, photo: u.photo })} />
+    );
+    case "gallery": return (
+      <GalleryPanel data={data} isOwner={isOwner}
+        onSaved={(items) => onDataUpdate({ galleryItems: items })} />
+    );
     case "diary":   return <p className="text-white/50 text-sm py-4 text-center">AI 다이어리는 곧 연동됩니다.</p>;
     case "link":    return <p className="text-white/50 text-sm py-4 text-center">링크 모음은 곧 추가됩니다.</p>;
     case "music":   return <p className="text-white/50 text-sm py-4 text-center">음악 공간은 곧 추가됩니다.</p>;
@@ -733,7 +750,12 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
               <button onClick={() => setOpenMenu(null)} className="text-white/50 hover:text-white"><X size={20} /></button>
             </div>
             <div className="overflow-y-auto flex-1 min-h-[80px]">
-              <MenuContent menu={openMenu} data={{ ...data, about: displayed.about, tagline: displayed.tagline, role: displayed.role }} isOwner={isOwner} />
+              <MenuContent
+                menu={openMenu}
+                data={{ ...data, about: displayed.about, tagline: displayed.tagline, role: displayed.role }}
+                isOwner={isOwner}
+                onDataUpdate={(u) => setData((prev) => ({ ...prev, ...u }))}
+              />
             </div>
           </div>
         </div>
