@@ -100,10 +100,14 @@ export interface PersonalSchema {
       name: string;
       autoPlay?: boolean;
     }>;
-    /** 메뉴 노드 위치 커스텀 (key=menu.id) */
+    /** 메뉴 노드 위치 — 데스크탑 */
     menuLayout?: Record<string, { top: string; left: string }>;
-    /** 에셋 위치 커스텀 (key=asset.id) */
+    /** 메뉴 노드 위치 — 모바일 (별도 저장) */
+    menuLayoutMobile?: Record<string, { top: string; left: string }>;
+    /** 에셋 위치 — 데스크탑 */
     assetPositions?: Record<string, { top: string; left: string }>;
+    /** 에셋 위치 — 모바일 (별도 저장) */
+    assetPositionsMobile?: Record<string, { top: string; left: string }>;
   };
 }
 

@@ -103,6 +103,31 @@ export async function registerSlug(params: {
   }
 }
 
+/* ─── 슬러그 target_url 업데이트 ──────────────── */
+
+export async function updateSlugTarget(slug: string, newTargetUrl: string): Promise<{ success: boolean; error?: string }> {
+  if (!REGISTRY_URL) return { success: false, error: "Registry URL 미설정" };
+  try {
+    // PATCH /api/slug/:slug/target 시도
+    const res = await fetch(`${REGISTRY_URL}/api/slug/${encodeURIComponent(slug)}/target`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ target_url: newTargetUrl }),
+    });
+    if (res.ok) return { success: true };
+    // fallback: 삭제 후 재등록
+    const del = await fetch(`${REGISTRY_URL}/api/slug/${encodeURIComponent(slug)}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (!del.ok && del.status !== 404) return { success: false, error: `DELETE 실패: ${del.status}` };
+    const created = await registerSlug({ slug, target_url: newTargetUrl });
+    return { success: created.success, error: created.error };
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+}
+
 /* ─── 슬러그 변경 ───────────────────────────── */
 
 export async function updateSlug(params: {
@@ -111,6 +136,5 @@ export async function updateSlug(params: {
   target_url: string;
   owner_id?: string;
 }): Promise<SlugCreateResult> {
-  // TODO: API에 PATCH /api/slug/:old_slug 생기면 교체
   return registerSlug({ slug: params.new_slug, target_url: params.target_url, owner_id: params.owner_id });
 }

@@ -21,7 +21,7 @@ import {
   Link2, Music, FileText, ArrowRight, Loader2,
   Github, Instagram, Linkedin, Globe, Mail,
   ChevronLeft, ChevronRight, Pencil, Plus, Check, Settings,
-  Play, Pause,
+  Play, Pause, LogIn,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +47,9 @@ export interface UniverseData {
   selectedAssets?: string[];
   bgmList?: BgmTrack[];
   menuLayout?: Record<string, { top: string; left: string }>;
+  menuLayoutMobile?: Record<string, { top: string; left: string }>;
   assetPositions?: Record<string, { top: string; left: string }>;
+  assetPositionsMobile?: Record<string, { top: string; left: string }>;
   ownerId?: string;
   personalId?: string;
 }
@@ -331,6 +333,38 @@ function MenuContent({ menu, data, isOwner }: { menu: UniverseMenu; data: Univer
   }
 }
 
+/* ─── 로그인 유도 모달 ─────────────────────────── */
+
+function LoginPrompt({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="absolute inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full sm:max-w-sm bg-[#0b1026] border border-white/10 rounded-t-3xl sm:rounded-3xl p-7 text-center" onClick={(e) => e.stopPropagation()}>
+        <div className="w-14 h-14 rounded-full bg-violet-500/20 border border-violet-400/30 flex items-center justify-center mx-auto mb-4">
+          <Sparkles size={24} className="text-violet-400" />
+        </div>
+        <h2 className="text-white font-bold text-lg mb-2">당신만의 별자리 우주</h2>
+        <p className="text-white/50 text-sm leading-relaxed mb-6">
+          이 기능은 로그인 후 이용할 수 있어요.<br />
+          지금 바로 나만의 우주를 만들어보세요.
+        </p>
+        <div className="flex flex-col gap-2">
+          <a href="/login"
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-violet-500 text-white font-bold hover:bg-violet-600 transition-colors">
+            <LogIn size={16} />로그인
+          </a>
+          <a href="/signup"
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-white/10 text-white/80 font-semibold hover:bg-white/15 transition-colors">
+            회원가입 (무료)
+          </a>
+          <button onClick={onClose} className="text-white/30 text-sm mt-1 hover:text-white/50">
+            구경만 할게요
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── 이웃 구경 모달 ───────────────────────────── */
 
 function NeighborModal({ onClose, fromId }: { onClose: () => void; fromId?: string }) {
@@ -440,6 +474,23 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   const [openMenu, setOpenMenu] = useState<UniverseMenu | null>(null);
   const [showNeighbors, setShowNeighbors] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+
+  // 로그인 없이 열람 가능한 메뉴
+  const PUBLIC_MENUS: UniverseIconType[] = ["profile", "gallery"];
+
+  const handleMenuClick = (menu: UniverseMenu) => {
+    if (!user && !PUBLIC_MENUS.includes(menu.icon)) {
+      setShowLoginPrompt(true);
+      return;
+    }
+    setOpenMenu(menu);
+  };
+
+  const handleNeighborClick = () => {
+    if (!user) { setShowLoginPrompt(true); return; }
+    setShowNeighbors(true);
+  };
   const searchParams = useSearchParams();
   const fromId = searchParams.get("from") ?? undefined;
 
@@ -539,22 +590,42 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
 
   const style = data.style ?? {};
 
+  // ── 뷰포트 감지 (모바일 < 768px) ────────────────
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
   // 설정 저장 후 로컬 상태 갱신
-  const handleSettingsSaved = (state: { selectedAssets: string[]; bgmList: BgmTrack[]; menuLayout: Record<string, { top: string; left: string }>; assetPositions: Record<string, { top: string; left: string }> }) => {
+  const handleSettingsSaved = (state: {
+    selectedAssets: string[];
+    bgmList: BgmTrack[];
+    menuLayout: Record<string, { top: string; left: string }>;
+    menuLayoutMobile: Record<string, { top: string; left: string }>;
+    assetPositions: Record<string, { top: string; left: string }>;
+    assetPositionsMobile: Record<string, { top: string; left: string }>;
+  }) => {
     setData((prev) => ({
       ...prev,
       selectedAssets: state.selectedAssets,
       bgmList: state.bgmList,
-      menuLayout: Object.keys(state.menuLayout).length > 0 ? state.menuLayout : undefined,
-      assetPositions: Object.keys(state.assetPositions).length > 0 ? state.assetPositions : undefined,
+      menuLayout:         Object.keys(state.menuLayout).length         > 0 ? state.menuLayout         : undefined,
+      menuLayoutMobile:   Object.keys(state.menuLayoutMobile).length   > 0 ? state.menuLayoutMobile   : undefined,
+      assetPositions:     Object.keys(state.assetPositions).length     > 0 ? state.assetPositions     : undefined,
+      assetPositionsMobile: Object.keys(state.assetPositionsMobile).length > 0 ? state.assetPositionsMobile : undefined,
     }));
-    // 트랙이 줄었으면 인덱스 보정
     setTrackIdx((i) => Math.min(i, Math.max(0, state.bgmList.length - 1)));
   };
 
-  // 메뉴 노드 위치: menuLayout 있으면 우선, 없으면 DEFAULT_POS
+  // 현재 뷰포트에 맞는 메뉴/에셋 위치
+  const activeMenuLayout    = isMobile ? (data.menuLayoutMobile    ?? data.menuLayout)    : data.menuLayout;
+  const activeAssetPositions = isMobile ? (data.assetPositionsMobile ?? data.assetPositions) : data.assetPositions;
+
   const getMenuPos = (menuId: string, idx: number) =>
-    data.menuLayout?.[menuId] ?? DEFAULT_POS[idx] ?? { top: "50%", left: "50%" };
+    activeMenuLayout?.[menuId] ?? DEFAULT_POS[idx] ?? { top: "50%", left: "50%" };
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-[#05060f]">
@@ -570,7 +641,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         <FloatingAssets
           selectedIds={data.selectedAssets}
           seed={constellation.seed}
-          customPositions={data.assetPositions}
+          customPositions={activeAssetPositions}
         />
       )}
 
@@ -582,7 +653,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         </a>
       )}
 
-      {/* 우상단: 언어 토글 + 설정 버튼 */}
+      {/* 우상단: 언어 토글 + 설정/로그인 버튼 */}
       <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
         <LangToggle lang={lang} loading={langLoading} onSwitch={switchLang} theme="dark" />
         {isOwner && (
@@ -590,6 +661,12 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white transition-colors">
             <Settings size={13} />{ui.settings}
           </button>
+        )}
+        {!user && (
+          <a href="/login"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/60 text-xs font-medium hover:bg-white/10 hover:text-white transition-colors">
+            <LogIn size={13} />로그인
+          </a>
         )}
       </div>
 
@@ -604,14 +681,19 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       {/* 메뉴 노드 — 위치는 menuLayout 우선 */}
       {(data.menus ?? []).slice(0, 6).map((menu, i) => {
         const pos = getMenuPos(menu.id, i);
+        const isPublic = PUBLIC_MENUS.includes(menu.icon);
         return (
-          <button key={menu.id} onClick={() => setOpenMenu(menu)}
+          <button key={menu.id} onClick={() => handleMenuClick(menu)}
             className="absolute z-20 -translate-x-1/2 -translate-y-1/2 group"
             style={{ top: pos.top, left: pos.left }}>
             <span className="flex flex-col items-center gap-2">
-              <span className="w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-sm border transition-transform group-hover:scale-110"
+              <span className="w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-sm border transition-transform group-hover:scale-110 relative"
                 style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}88`, color: "#fff", boxShadow: `0 0 20px ${data.color}55` }}>
                 {ICON[menu.icon]}
+                {/* 비로그인 + 제한 메뉴에 자물쇠 뱃지 */}
+                {!user && !isPublic && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[8px]">🔒</span>
+                )}
               </span>
               <span className="text-xs font-medium text-white/80">{menu.label}</span>
             </span>
@@ -634,7 +716,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         )}
         <button className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold text-white backdrop-blur-sm border"
           style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}66` }}
-          onClick={() => setShowNeighbors(true)}>
+          onClick={handleNeighborClick}>
           <Sparkles size={15} />{ui.neighbor}
         </button>
       </div>
@@ -660,6 +742,9 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       {/* 이웃 구경 모달 */}
       {showNeighbors && <NeighborModal onClose={() => setShowNeighbors(false)} fromId={data.personalId} />}
 
+      {/* 로그인 유도 모달 */}
+      {showLoginPrompt && <LoginPrompt onClose={() => setShowLoginPrompt(false)} />}
+
       {/* 설정 패널 */}
       {showSettings && data.personalId && (
         <UniverseSettings
@@ -668,7 +753,9 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           initialAssets={data.selectedAssets ?? []}
           initialBgmList={bgmList}
           initialLayout={data.menuLayout}
+          initialLayoutMobile={data.menuLayoutMobile}
           initialAssetPositions={data.assetPositions}
+          initialAssetPositionsMobile={data.assetPositionsMobile}
           allAssets={DEFAULT_ASSETS}
           bgmPlaying={bgmPlaying}
           onToggleBgm={toggleBgm}

@@ -74,7 +74,9 @@ export default async function PersonalPage({ params }: Props) {
       selectedAssets: p.universe.selectedAssets,
       bgmList,
       menuLayout: p.universe.menuLayout,
+      menuLayoutMobile: p.universe.menuLayoutMobile,
       assetPositions: p.universe.assetPositions,
+      assetPositionsMobile: p.universe.assetPositionsMobile,
     };
 
     return (

@@ -11,9 +11,10 @@ import { logout } from "@/lib/firebase/auth";
 import type { SiteSchema } from "@/lib/types/site";
 import type { PersonalSchema } from "@/lib/types/personal";
 import { getAppUrl } from "@/lib/utils";
+import { updateSlugTarget } from "@/lib/slug-registry";
 import {
   Plus, Globe, Pencil, ExternalLink, Sparkles, LogOut, User,
-  MoreVertical, Trash2, Layers, Star, Building2,
+  MoreVertical, Trash2, Layers, Star, Building2, RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -276,12 +277,31 @@ function SiteCard({ site, onDelete }: { site: SiteSchema; onDelete: () => void }
 /* ── 개인 페이지 카드 ── */
 function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () => void }) {
   const [deleting, setDeleting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [fixing, setFixing] = useState(false);
 
   const handleDelete = async () => {
+    setMenuOpen(false);
     if (!confirm(`"${page.profile.name}" 페이지를 삭제할까요?`)) return;
     setDeleting(true);
     try { await deletePersonal(page.id); onDelete(); }
     catch { setDeleting(false); alert("삭제에 실패했습니다."); }
+  };
+
+  // 슬러그 target_url을 현재 살아있는 URL로 재등록
+  const handleFixSlug = async () => {
+    setMenuOpen(false);
+    if (!page.publicSlug) { alert("등록된 슬러그가 없습니다."); return; }
+    setFixing(true);
+    try {
+      const newTarget = `${window.location.origin}/p/${page.id}`;
+      const result = await updateSlugTarget(page.publicSlug, newTarget);
+      if (result.success) {
+        alert(`✅ 슬러그 URL 재등록 완료!\n${page.publicSlug} → ${newTarget}`);
+      } else {
+        alert(`❌ 재등록 실패: ${result.error}`);
+      }
+    } finally { setFixing(false); }
   };
 
   const isUniverse = !!page.universe;
@@ -289,7 +309,6 @@ function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () =
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between">
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        {/* 별자리 색 미니 도트 */}
         <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
           style={{ backgroundColor: isUniverse ? `${page.universe!.color}22` : "#f3f4f6" }}>
           {isUniverse
@@ -306,10 +325,11 @@ function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () =
             }
           </div>
           <p className="text-xs text-gray-400 truncate">
-            {page.publicUrl || `${page.profile.tagline || (isUniverse ? "별자리 우주" : "개인 페이지")}`}
+            {page.publicUrl || (isUniverse ? "별자리 우주" : "개인 페이지")}
           </p>
         </div>
       </div>
+
       <div className="flex items-center gap-1 ml-3 shrink-0">
         <a href={`/p/${page.id}`} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-gray-100 rounded-lg" title="보기">
           <ExternalLink size={16} className="text-gray-500" />
@@ -317,9 +337,31 @@ function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () =
         <Link href={`/private/edit/${page.id}`} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-sm rounded-xl font-semibold hover:bg-gray-700">
           <Pencil size={14} />편집
         </Link>
-        <button onClick={handleDelete} disabled={deleting} className="p-2 text-red-400 hover:bg-red-50 rounded-lg">
-          <Trash2 size={15} />
-        </button>
+        <div className="relative">
+          <button onClick={() => setMenuOpen((v) => !v)} disabled={deleting || fixing}
+            className="p-2 hover:bg-gray-100 rounded-lg">
+            {fixing
+              ? <RefreshCw size={15} className="text-violet-500 animate-spin" />
+              : <MoreVertical size={15} className="text-gray-500" />}
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-20">
+                {page.publicSlug && (
+                  <button onClick={handleFixSlug}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-violet-600 hover:bg-violet-50">
+                    <RefreshCw size={14} />슬러그 URL 재등록
+                  </button>
+                )}
+                <button onClick={handleDelete}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-50">
+                  <Trash2 size={14} />삭제
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

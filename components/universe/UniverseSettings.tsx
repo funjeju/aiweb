@@ -21,7 +21,9 @@ interface SettingsState {
   selectedAssets: string[];
   bgmList: BgmTrack[];
   menuLayout: Record<string, { top: string; left: string }>;
+  menuLayoutMobile: Record<string, { top: string; left: string }>;
   assetPositions: Record<string, { top: string; left: string }>;
+  assetPositionsMobile: Record<string, { top: string; left: string }>;
 }
 
 const DEFAULT_POS = [
@@ -37,33 +39,48 @@ const ICON_MAP: Record<string, string> = {
   profile: "👤", diary: "📖", gallery: "🖼", link: "🔗", music: "🎵", note: "📝",
 };
 
-/* ─── 레이아웃 드래그 탭 ─────────────────────── */
+/* ─── 레이아웃 드래그 탭 (모바일/데스크탑 분리) ── */
+
+type ViewMode = "desktop" | "mobile";
 
 function LayoutTab({
   menus,
   layout,
+  layoutMobile,
   onLayoutChange,
+  onLayoutMobileChange,
   selectedAssets,
   assetPositions,
+  assetPositionsMobile,
   onAssetPosChange,
+  onAssetPosMobileChange,
   allAssets,
 }: {
   menus: MenuNode[];
   layout: Record<string, { top: string; left: string }>;
-  onLayoutChange: (layout: Record<string, { top: string; left: string }>) => void;
+  layoutMobile: Record<string, { top: string; left: string }>;
+  onLayoutChange: (v: Record<string, { top: string; left: string }>) => void;
+  onLayoutMobileChange: (v: Record<string, { top: string; left: string }>) => void;
   selectedAssets: string[];
   assetPositions: Record<string, { top: string; left: string }>;
-  onAssetPosChange: (pos: Record<string, { top: string; left: string }>) => void;
+  assetPositionsMobile: Record<string, { top: string; left: string }>;
+  onAssetPosChange: (v: Record<string, { top: string; left: string }>) => void;
+  onAssetPosMobileChange: (v: Record<string, { top: string; left: string }>) => void;
   allAssets: UniverseAsset[];
 }) {
+  const [viewMode, setViewMode] = useState<ViewMode>("desktop");
   const containerRef = useRef<HTMLDivElement>(null);
-  // draggingId: "{menu|asset}:{id}" 형태
   const draggingId = useRef<string | null>(null);
 
-  const getMenuPos = (id: string, i: number) =>
-    layout[id] ?? DEFAULT_POS[i] ?? { top: "50%", left: "50%" };
+  // 현재 모드의 레이아웃 값
+  const activeLayout    = viewMode === "mobile" ? layoutMobile    : layout;
+  const activeAssetPos  = viewMode === "mobile" ? assetPositionsMobile : assetPositions;
+  const setActiveLayout    = viewMode === "mobile" ? onLayoutMobileChange    : onLayoutChange;
+  const setActiveAssetPos  = viewMode === "mobile" ? onAssetPosMobileChange  : onAssetPosChange;
 
-  // 에셋 기본 위치 (시드 없이 균등 배치)
+  const getMenuPos = (id: string, i: number) =>
+    activeLayout[id] ?? DEFAULT_POS[i] ?? { top: "50%", left: "50%" };
+
   const getAssetDefaultPos = (idx: number, total: number) => ({
     top: `${20 + (idx / Math.max(total - 1, 1)) * 60}%`,
     left: `${15 + (idx % 2 === 0 ? 20 : 60)}%`,
@@ -78,24 +95,33 @@ function LayoutTab({
     const key = draggingId.current;
     if (!key || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const top = Math.min(94, Math.max(4, ((e.clientY - rect.top) / rect.height) * 100)).toFixed(1) + "%";
-    const left = Math.min(94, Math.max(4, ((e.clientX - rect.left) / rect.width) * 100)).toFixed(1) + "%";
-
+    const top  = Math.min(94, Math.max(4, ((e.clientY - rect.top)  / rect.height) * 100)).toFixed(1) + "%";
+    const left = Math.min(94, Math.max(4, ((e.clientX - rect.left) / rect.width)  * 100)).toFixed(1) + "%";
     if (key.startsWith("menu:")) {
-      const id = key.slice(5);
-      onLayoutChange({ ...layout, [id]: { top, left } });
+      setActiveLayout({ ...activeLayout, [key.slice(5)]: { top, left } });
     } else if (key.startsWith("asset:")) {
-      const id = key.slice(6);
-      onAssetPosChange({ ...assetPositions, [id]: { top, left } });
+      setActiveAssetPos({ ...activeAssetPos, [key.slice(6)]: { top, left } });
     }
-  }, [layout, assetPositions, onLayoutChange, onAssetPosChange]);
+  }, [activeLayout, activeAssetPos, setActiveLayout, setActiveAssetPos]);
 
   const handlePointerUp = () => { draggingId.current = null; };
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-white/50">
-        메뉴 노드와 에셋을 드래그해서 원하는 위치에 배치하세요.
+      {/* 모바일 / 데스크탑 토글 */}
+      <div className="flex gap-1 p-1 bg-white/5 rounded-xl">
+        {(["desktop", "mobile"] as ViewMode[]).map((m) => (
+          <button key={m} onClick={() => setViewMode(m)}
+            className={cn("flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+              viewMode === m ? "bg-violet-500 text-white" : "text-white/40 hover:text-white/70")}>
+            {m === "desktop" ? "💻 데스크탑" : "📱 모바일"}
+          </button>
+        ))}
+      </div>
+
+      <p className="text-xs text-white/40">
+        {viewMode === "mobile" ? "모바일" : "데스크탑"} 전용 위치를 드래그해서 설정하세요.
+        두 기기의 위치가 독립적으로 저장됩니다.
       </p>
 
       {/* 범례 */}
@@ -104,22 +130,20 @@ function LayoutTab({
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-amber-500/30 border border-amber-400/50 inline-block" />에셋</span>
       </div>
 
-      {/* 드래그 영역 */}
+      {/* 드래그 영역 — 모바일은 세로 비율, 데스크탑은 가로 비율 */}
       <div
         ref={containerRef}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         className="relative w-full rounded-2xl overflow-hidden border border-white/10 bg-[#05060f] select-none"
-        style={{ aspectRatio: "9/16", maxHeight: 380 }}
+        style={{ aspectRatio: viewMode === "mobile" ? "9/16" : "16/9", maxHeight: 380 }}
       >
-        {/* 배경 별 */}
         <div className="absolute inset-0 opacity-20">
           {Array.from({ length: 30 }).map((_, i) => (
             <div key={i} className="absolute w-0.5 h-0.5 rounded-full bg-white"
               style={{ top: `${(i * 37) % 100}%`, left: `${(i * 61) % 100}%` }} />
           ))}
         </div>
-
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white/20 text-xs text-center pointer-events-none">
           ✦ 별자리
         </div>
@@ -146,7 +170,7 @@ function LayoutTab({
         {selectedAssets.map((assetId, i) => {
           const asset = allAssets.find((a) => a.id === assetId);
           if (!asset) return null;
-          const pos = assetPositions[assetId] ?? getAssetDefaultPos(i, selectedAssets.length);
+          const pos = activeAssetPos[assetId] ?? getAssetDefaultPos(i, selectedAssets.length);
           return (
             <div key={`a-${assetId}`}
               onPointerDown={(e) => handlePointerDown(e, `asset:${assetId}`)}
@@ -163,13 +187,13 @@ function LayoutTab({
         })}
       </div>
 
-      <div className="flex gap-3">
-        <button onClick={() => onLayoutChange({})}
+      <div className="flex gap-3 flex-wrap">
+        <button onClick={() => setActiveLayout({})}
           className="text-xs text-white/30 hover:text-white/60 transition-colors">
           메뉴 위치 초기화
         </button>
         <span className="text-white/20">·</span>
-        <button onClick={() => onAssetPosChange({})}
+        <button onClick={() => setActiveAssetPos({})}
           className="text-xs text-white/30 hover:text-white/60 transition-colors">
           에셋 위치 초기화
         </button>
@@ -352,7 +376,9 @@ export function UniverseSettings({
   initialAssets,
   initialBgmList,
   initialLayout,
+  initialLayoutMobile,
   initialAssetPositions,
+  initialAssetPositionsMobile,
   allAssets = DEFAULT_ASSETS,
   bgmPlaying,
   onToggleBgm,
@@ -363,8 +389,10 @@ export function UniverseSettings({
   menus: MenuNode[];
   initialAssets: string[];
   initialBgmList: BgmTrack[];
-  initialLayout: Record<string, { top: string; left: string }> | undefined;
+  initialLayout?: Record<string, { top: string; left: string }>;
+  initialLayoutMobile?: Record<string, { top: string; left: string }>;
   initialAssetPositions?: Record<string, { top: string; left: string }>;
+  initialAssetPositionsMobile?: Record<string, { top: string; left: string }>;
   allAssets?: UniverseAsset[];
   bgmPlaying: boolean;
   onToggleBgm: () => void;
@@ -376,8 +404,10 @@ export function UniverseSettings({
   const [state, setState] = useState<SettingsState>({
     selectedAssets: initialAssets,
     bgmList: initialBgmList,
-    menuLayout: initialLayout ?? {},
-    assetPositions: initialAssetPositions ?? {},
+    menuLayout:           initialLayout               ?? {},
+    menuLayoutMobile:     initialLayoutMobile         ?? {},
+    assetPositions:       initialAssetPositions       ?? {},
+    assetPositionsMobile: initialAssetPositionsMobile ?? {},
   });
 
   const save = async () => {
@@ -394,13 +424,14 @@ export function UniverseSettings({
         "universe.bgmList": state.bgmList,
       };
 
-      if (Object.keys(state.menuLayout).length > 0) {
+      if (Object.keys(state.menuLayout).length > 0)
         update["universe.menuLayout"] = state.menuLayout;
-      }
-
-      if (Object.keys(state.assetPositions).length > 0) {
+      if (Object.keys(state.menuLayoutMobile).length > 0)
+        update["universe.menuLayoutMobile"] = state.menuLayoutMobile;
+      if (Object.keys(state.assetPositions).length > 0)
         update["universe.assetPositions"] = state.assetPositions;
-      }
+      if (Object.keys(state.assetPositionsMobile).length > 0)
+        update["universe.assetPositionsMobile"] = state.assetPositionsMobile;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await updatePersonal(personalId, update as any);
@@ -460,10 +491,14 @@ export function UniverseSettings({
             <LayoutTab
               menus={menus}
               layout={state.menuLayout}
-              onLayoutChange={(layout) => setState((p) => ({ ...p, menuLayout: layout }))}
+              layoutMobile={state.menuLayoutMobile}
+              onLayoutChange={(v) => setState((p) => ({ ...p, menuLayout: v }))}
+              onLayoutMobileChange={(v) => setState((p) => ({ ...p, menuLayoutMobile: v }))}
               selectedAssets={state.selectedAssets}
               assetPositions={state.assetPositions}
-              onAssetPosChange={(pos) => setState((p) => ({ ...p, assetPositions: pos }))}
+              assetPositionsMobile={state.assetPositionsMobile}
+              onAssetPosChange={(v) => setState((p) => ({ ...p, assetPositions: v }))}
+              onAssetPosMobileChange={(v) => setState((p) => ({ ...p, assetPositionsMobile: v }))}
               allAssets={allAssets}
             />
           )}
