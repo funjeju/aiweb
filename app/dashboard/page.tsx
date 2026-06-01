@@ -302,14 +302,12 @@ function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () =
       });
       const data = await res.json();
       if (data.success) {
-        alert(`✅ 주소 등록 완료!\n${data.publicUrl}\n\n페이지를 새로고침하면 반영됩니다.`);
+        const msg = data.registrySucceeded
+          ? `✅ 주소 발급 완료!\n${data.publicUrl}`
+          : `⚠️ 단축 URL 서비스 연결 불가\n직접 주소로 저장되었습니다:\n${data.publicUrl}\n\n(study.funjeju.com 프로젝트 재배포 후 재시도하면 단축 URL로 교체됩니다)`;
+        alert(msg + "\n\n페이지를 새로고침하면 반영됩니다.");
       } else {
-        const detail = [
-          `❌ 등록 실패: ${data.error}`,
-          data.diagnosis ? `\n진단: ${data.diagnosis}` : "",
-          data.registryResponse ? `\n레지스트리 응답: ${data.registryResponse}` : "",
-        ].join("");
-        alert(detail);
+        alert(`❌ 오류: ${data.error}`);
       }
     } catch (e) {
       alert(`❌ 오류: ${String(e)}`);

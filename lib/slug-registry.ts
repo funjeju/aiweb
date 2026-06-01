@@ -2,14 +2,16 @@
  * Tool Suite (study.funjeju.com) 슬러그 Registry API 래퍼.
  *
  * .env.local:
- *   NEXT_PUBLIC_SLUG_REGISTRY_URL=https://study.funjeju.com
+ *   NEXT_PUBLIC_SLUG_REGISTRY_URL=https://study.funjeju.com/api/slug/create   ← 전체 create URL
  *   NEXT_PUBLIC_SLUG_REGISTRY_KEY=study-slug-key-2024
- *   NEXT_PUBLIC_SLUG_DOMAIN=study.funjeju.com
+ *   NEXT_PUBLIC_SLUG_DOMAIN=https://study.funjeju.com                          ← 베이스 도메인
  */
 
-const REGISTRY_URL = (process.env.NEXT_PUBLIC_SLUG_REGISTRY_URL ?? "").replace(/\/$/, "");
-const REGISTRY_KEY = process.env.NEXT_PUBLIC_SLUG_REGISTRY_KEY ?? "";
-const PUBLIC_DOMAIN = process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "study.funjeju.com";
+// create 엔드포인트 전체 URL
+const REGISTRY_CREATE_URL = (process.env.NEXT_PUBLIC_SLUG_REGISTRY_URL ?? "").replace(/\/$/, "");
+const REGISTRY_KEY        = process.env.NEXT_PUBLIC_SLUG_REGISTRY_KEY ?? "";
+// 베이스 도메인 (단축 URL 구성 + check 엔드포인트 파생에 사용)
+const REGISTRY_BASE       = (process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "https://study.funjeju.com").replace(/\/$/, "");
 
 function authHeaders(): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
@@ -54,9 +56,9 @@ export function normalizeSlug(raw: string): string {
 /* ─── 슬러그 중복 체크 ──────────────────────── */
 
 export async function checkSlugAvailable(slug: string): Promise<SlugCheckResult> {
-  if (!REGISTRY_URL) return { available: true };
+  if (!REGISTRY_BASE) return { available: true };
   try {
-    const res = await fetch(`${REGISTRY_URL}/api/slug/check/${encodeURIComponent(slug)}`, {
+    const res = await fetch(`${REGISTRY_BASE}/api/slug/check/${encodeURIComponent(slug)}`, {
       headers: authHeaders(),
     });
     if (!res.ok) return { available: true };
@@ -75,26 +77,25 @@ export async function registerSlug(params: {
 }): Promise<SlugCreateResult> {
   const { slug, target_url } = params;
 
-  if (!REGISTRY_URL) {
-    // stub 모드: API 미설정 시 입력값 그대로 반환
-    return { success: true, final_slug: slug, short_url: `${PUBLIC_DOMAIN}/${slug}` };
+  if (!REGISTRY_CREATE_URL) {
+    // stub 모드: 환경변수 미설정 시 베이스 도메인으로 URL 구성
+    return { success: true, final_slug: slug, short_url: `${REGISTRY_BASE}/${slug}` };
   }
 
   try {
-    const res = await fetch(`${REGISTRY_URL}/api/slug/create`, {
+    const res = await fetch(REGISTRY_CREATE_URL, {  // URL 직접 사용 (경로 추가 없음)
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify({
         target_url,
-        preferred_slug: slug,   // API 스펙: preferred_slug
+        preferred_slug: slug,
       }),
     });
     const data = await res.json();
-    // 응답 필드 정규화 (API가 slug/url로 내려줄 수도 있음)
     return {
       success: data.success ?? res.ok,
       final_slug: data.final_slug ?? data.slug ?? slug,
-      short_url:  data.short_url  ?? data.url  ?? `${PUBLIC_DOMAIN}/${data.final_slug ?? slug}`,
+      short_url:  data.short_url  ?? data.url  ?? `${REGISTRY_BASE}/${data.final_slug ?? slug}`,
       suggestions: data.suggestions,
       error: data.error,
     };
@@ -106,17 +107,16 @@ export async function registerSlug(params: {
 /* ─── 슬러그 target_url 업데이트 ──────────────── */
 
 export async function updateSlugTarget(slug: string, newTargetUrl: string): Promise<{ success: boolean; error?: string }> {
-  if (!REGISTRY_URL) return { success: false, error: "Registry URL 미설정" };
+  if (!REGISTRY_BASE) return { success: false, error: "Registry 미설정" };
   try {
-    // PATCH /api/slug/:slug/target 시도
-    const res = await fetch(`${REGISTRY_URL}/api/slug/${encodeURIComponent(slug)}/target`, {
+    const res = await fetch(`${REGISTRY_BASE}/api/slug/${encodeURIComponent(slug)}/target`, {
       method: "PATCH",
       headers: authHeaders(),
       body: JSON.stringify({ target_url: newTargetUrl }),
     });
     if (res.ok) return { success: true };
     // fallback: 삭제 후 재등록
-    const del = await fetch(`${REGISTRY_URL}/api/slug/${encodeURIComponent(slug)}`, {
+    const del = await fetch(`${REGISTRY_BASE}/api/slug/${encodeURIComponent(slug)}`, {
       method: "DELETE",
       headers: authHeaders(),
     });
