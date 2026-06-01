@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSitesByOwner, deleteSite } from "@/lib/firebase/sites";
-import { getPersonalsByOwner, deletePersonal } from "@/lib/firebase/personals";
+import { getPersonalsByOwner, deletePersonal, getAllPersonals } from "@/lib/firebase/personals";
 import { useAuthStore } from "@/lib/store/authStore";
 import { canManageSites } from "@/lib/firebase/users";
 import { logout } from "@/lib/firebase/auth";
@@ -14,11 +14,11 @@ import { getAppUrl } from "@/lib/utils";
 // slug 재등록은 서버사이드 API route로 처리 (CORS 우회)
 import {
   Plus, Globe, Pencil, ExternalLink, Sparkles, LogOut, User,
-  MoreVertical, Trash2, Layers, Star, Building2, RefreshCw,
+  MoreVertical, Trash2, Layers, Star, Building2, RefreshCw, Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Tab = "business" | "personal";
+type Tab = "business" | "personal" | "admin";
 
 export default function DashboardPage() {
   return (
@@ -43,7 +43,9 @@ function DashboardContent() {
 
   const [sites, setSites] = useState<SiteSchema[]>([]);
   const [pages, setPages] = useState<PersonalSchema[]>([]);
+  const [allPages, setAllPages] = useState<PersonalSchema[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const isAdmin = profile?.role === "admin";
 
   useEffect(() => {
     if (authLoading) return;
@@ -56,6 +58,9 @@ function DashboardContent() {
     ];
     if (canBusiness) {
       loads.push(getSitesByOwner(user.uid).then((s) => setSites(s)));
+    }
+    if (profile?.role === "admin") {
+      loads.push(getAllPersonals().then((p) => setAllPages(p)));
     }
     Promise.all(loads).finally(() => setLoadingData(false));
   }, [user, profile, authLoading, canBusiness, router]);
@@ -101,6 +106,11 @@ function DashboardContent() {
             <Link href="/private/create" className="flex items-center gap-2 px-4 py-2 bg-violet-500 text-white rounded-xl text-sm font-semibold hover:bg-violet-600 transition-colors">
               <Plus size={16} />새 별자리
             </Link>
+          )}
+          {tab === "admin" && (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 rounded-xl text-sm font-semibold">
+              <Shield size={14} />전체 {allPages.length}개
+            </span>
           )}
           <button onClick={handleLogout} className="p-2 hover:bg-gray-100 rounded-lg" title="로그아웃">
             <LogOut size={18} className="text-gray-500" />
@@ -153,6 +163,20 @@ function DashboardContent() {
               </span>
             )}
           </button>
+          {isAdmin && (
+            <button
+              onClick={() => setTab("admin")}
+              className={cn("flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-colors",
+                tab === "admin" ? "bg-white text-red-600 shadow-sm" : "text-gray-500 hover:text-gray-700")}
+            >
+              <Shield size={14} />전체 관리
+              {allPages.length > 0 && (
+                <span className={cn("text-xs rounded-full px-1.5", tab === "admin" ? "bg-red-100 text-red-600" : "bg-gray-200 text-gray-500")}>
+                  {allPages.length}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -197,6 +221,24 @@ function DashboardContent() {
               </div>
             )}
           </>
+        )}
+
+        {/* ── 어드민: 전체 관리 탭 ── */}
+        {tab === "admin" && isAdmin && (
+          <div className="space-y-3">
+            {allPages.length === 0 ? (
+              <p className="text-center text-gray-400 py-12 text-sm">등록된 페이지가 없어요.</p>
+            ) : (
+              <>
+                <p className="text-xs text-gray-400 mb-2">전체 {allPages.length}개 · 모든 사용자의 개인 페이지</p>
+                {allPages
+                  .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))
+                  .map((p) => (
+                    <AdminPersonalCard key={p.id} page={p} />
+                  ))}
+              </>
+            )}
+          </div>
         )}
       </main>
     </div>
@@ -370,6 +412,57 @@ function PersonalCard({ page, onDelete }: { page: PersonalSchema; onDelete: () =
             </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── 어드민: 전체 페이지 카드 (소유자 정보 포함) ── */
+function AdminPersonalCard({ page }: { page: PersonalSchema }) {
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!confirm(`[관리자] "${page.profile.name}" 페이지를 삭제할까요?\nownerId: ${page.ownerId}`)) return;
+    setDeleting(true);
+    try { await deletePersonal(page.id); location.reload(); }
+    catch { setDeleting(false); alert("삭제에 실패했습니다."); }
+  };
+
+  const isUniverse = !!page.universe;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center justify-between">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ backgroundColor: isUniverse ? `${page.universe!.color}22` : "#f3f4f6" }}>
+          {isUniverse
+            ? <Star size={18} style={{ color: page.universe!.color }} />
+            : <User size={18} className="text-gray-400" />}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-gray-900 truncate">{page.profile.name || "이름 없음"}</p>
+            {page.published
+              ? <span className="shrink-0 flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full"><Globe size={10} />공개</span>
+              : <span className="shrink-0 text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">비공개</span>}
+          </div>
+          <p className="text-xs text-gray-400 truncate">
+            {page.publicUrl || (isUniverse ? "별자리 우주" : "개인 페이지")}
+          </p>
+          <p className="text-[10px] text-gray-300 truncate font-mono">id: {page.id} · owner: {page.ownerId}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1 ml-3 shrink-0">
+        <a href={`/p/${page.id}`} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-gray-100 rounded-lg" title="보기">
+          <ExternalLink size={16} className="text-gray-500" />
+        </a>
+        <Link href={`/private/edit/${page.id}`} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 text-white text-sm rounded-xl font-semibold hover:bg-gray-700">
+          <Pencil size={14} />편집
+        </Link>
+        <button onClick={handleDelete} disabled={deleting} className="p-2 text-red-400 hover:bg-red-50 rounded-lg" title="삭제">
+          <Trash2 size={15} />
+        </button>
       </div>
     </div>
   );

@@ -57,10 +57,11 @@ export default async function PersonalPage({ params }: Props) {
       ?? (p.universe.bgm ? [p.universe.bgm] : []);
 
     // publicUrl 폴백: publicSlug로 구성, 없으면 직접 URL
-    const slugDomain = process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "study.funjeju.com";
-    const appUrl     = process.env.NEXT_PUBLIC_APP_URL     ?? "";
-    const publicUrl  = p.publicUrl
-      || (p.publicSlug ? `https://${slugDomain}/${p.publicSlug}` : null)
+    // NEXT_PUBLIC_SLUG_DOMAIN 이 https:// 포함할 수도 있으므로 중복 방지
+    const slugBase = (process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "https://study.funjeju.com").replace(/\/$/, "");
+    const appUrl   = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+    const publicUrl = p.publicUrl
+      || (p.publicSlug ? `${slugBase}/${p.publicSlug}` : null)
       || (appUrl ? `${appUrl}/p/${p.id}` : null)
       || null;
 

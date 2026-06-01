@@ -116,10 +116,10 @@ export function StarfieldCanvas({
       shootingStars.push({ x, y, vx, vy, life: 0, maxLife, len: 0.18 + Math.random() * 0.1 });
     };
 
-    // 30초마다 별똥별 소환
-    const shootTimer = setInterval(spawnShootingStar, 30000);
-    // 첫 로드 후 5초에 한 번 선제 발사 (첫 방문자 경험)
-    const firstShot = setTimeout(spawnShootingStar, 5000);
+    // 10초마다 별똥별 소환
+    const shootTimer = setInterval(spawnShootingStar, 10000);
+    // 첫 로드 후 3초에 선제 발사
+    const firstShot = setTimeout(spawnShootingStar, 3000);
 
     const draw = (t: number) => {
       const grad = ctx.createRadialGradient(w / 2, h * 0.42, 0, w / 2, h / 2, Math.max(w, h) * 0.75);

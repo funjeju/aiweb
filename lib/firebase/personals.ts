@@ -40,3 +40,10 @@ export async function getPublishedUniverses(maxCount = 30): Promise<PersonalSche
     .map((d) => d.data() as PersonalSchema)
     .filter((p) => !!p.universe?.color);
 }
+
+/** 전체 개인 페이지 조회 (어드민 전용) */
+export async function getAllPersonals(maxCount = 200): Promise<PersonalSchema[]> {
+  const q = query(collection(db, COLLECTION), limit(maxCount));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => d.data() as PersonalSchema);
+}
