@@ -55,6 +55,12 @@ export default async function PersonalPage({ params }: Props) {
         favoriteNumber: p.universe.favoriteNumber,
         menus: p.universe.menus,
         about: p.about || p.profile.bio,
+        style: p.universe.style,
+        photo: p.profile.photo,
+        tagline: p.profile.tagline,
+        role: p.profile.role,
+        socials: p.profile.socials,
+        galleryImages: p.universe.galleryImages,
       }} />
     );
   }

@@ -1,6 +1,6 @@
 import {
   doc, getDoc, setDoc, updateDoc, deleteDoc,
-  collection, query, where, getDocs, serverTimestamp,
+  collection, query, where, getDocs, serverTimestamp, limit,
 } from "firebase/firestore";
 import { db } from "./client";
 import type { PersonalSchema } from "@/lib/types/personal";
@@ -30,4 +30,13 @@ export async function updatePersonal(id: string, data: Partial<PersonalSchema>):
 
 export async function deletePersonal(id: string): Promise<void> {
   await deleteDoc(doc(db, COLLECTION, id));
+}
+
+/** published된 별자리 우주 목록 (랜덤 이웃 구경용). 클라이언트 필터로 universe 보유 여부 확인. */
+export async function getPublishedUniverses(maxCount = 30): Promise<PersonalSchema[]> {
+  const q = query(collection(db, COLLECTION), where("published", "==", true), limit(maxCount));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => d.data() as PersonalSchema)
+    .filter((p) => !!p.universe?.color);
 }

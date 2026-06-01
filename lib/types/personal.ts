@@ -23,10 +23,27 @@ export interface PersonalSocials {
 /** 표시할 섹션 (원페이지 앵커 네비용). 순서 = 표시 순서 */
 export type PersonalSection = "hero" | "about" | "skills" | "projects" | "contact";
 
+export type UniverseIconType = "profile" | "diary" | "gallery" | "link" | "music" | "note";
+
+export type SkyTheme = "deep-space" | "purple-galaxy" | "jeju" | "vintage";
+export type LineStyle = "flow" | "dotted" | "aurora";
+export type StarGlow = "default" | "soft" | "intense";
+
+export interface UniverseStyle {
+  skyTheme?: SkyTheme;
+  lineStyle?: LineStyle;
+  starGlow?: StarGlow;
+}
+
 export interface PersonalSchema {
   id: string;
   ownerId: string;
+  /** Firestore 문서 내부용 ID 슬러그 (auto-generated) */
   slug: string;
+  /** 중앙 Registry에서 할당된 공개 슬러그 (예: "funjeju") */
+  publicSlug?: string;
+  /** Registry 발급 공개 URL (예: "study.funjeju.co/funjeju") */
+  publicUrl?: string;
   published: boolean;
   createdAt: string;
   updatedAt: string;
@@ -36,9 +53,9 @@ export interface PersonalSchema {
 
   profile: {
     name: string;
-    tagline: string; // 한 줄 소개 (예: 프론트엔드 개발자 | 웹을 통해 가치를 만드는 사람)
+    tagline: string;
     role: string;
-    bio: string; // 자기소개 문단
+    bio: string;
     photo?: string;
     heroImage?: string;
     socials: PersonalSocials;
@@ -57,9 +74,11 @@ export interface PersonalSchema {
 
   /** 별자리 우주 모드 (개인 웹의 메인 컨셉). 있으면 우주 홈으로 렌더 */
   universe?: {
-    color: string; // 좋아하는 색 (별자리 메인 컬러)
-    favoriteNumber: number; // 좋아하는 숫자 (시드)
-    menus: Array<{ id: string; label: string; icon: "profile" | "diary" | "gallery" }>;
+    color: string;
+    favoriteNumber: number;
+    menus: Array<{ id: string; label: string; icon: UniverseIconType }>;
+    style?: UniverseStyle;
+    galleryImages?: string[]; // Firebase Storage URL 목록
   };
 }
 
