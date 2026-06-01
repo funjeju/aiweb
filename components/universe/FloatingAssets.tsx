@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import Image from "next/image";
-import { DEFAULT_ASSETS } from "@/lib/types/asset";
+import { DEFAULT_ASSETS, PROFILE_PHOTO_ASSET } from "@/lib/types/asset";
 import type { UniverseAsset } from "@/lib/types/asset";
 
 /** mulberry32 PRNG — 결정적 랜덤 (시드 기반으로 위치 고정) */
@@ -40,8 +40,14 @@ export function FloatingAssets({
   const placed = useMemo<PlacedAsset[]>(() => {
     const rng = seededRandom(seed ^ 0xdeadbeef);
     return selectedIds.flatMap((id) => {
-      const asset = allAssets.find((a) => a.id === id);
-      if (!asset) return [];
+      let asset: UniverseAsset | undefined;
+      if (id === "profile-photo") {
+        if (!profilePhotoUrl) return [];
+        asset = PROFILE_PHOTO_ASSET;
+      } else {
+        asset = allAssets.find((a) => a.id === id);
+        if (!asset) return [];
+      }
       const custom = customPositions[id];
       return [{
         asset,

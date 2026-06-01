@@ -1481,7 +1481,9 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
               <span className="w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-sm border transition-transform group-hover:scale-110 relative"
                 style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}88`, color: "#fff", boxShadow: `0 0 20px ${data.color}55` }}>
                 {menu.customIcon
-                  ? <span className="text-xl leading-none">{menu.customIcon}</span>
+                  ? (menu.customIcon.startsWith("http") || menu.customIcon.startsWith("/"))
+                    ? <img src={menu.customIcon} alt="" className="w-5 h-5 rounded-full object-cover" />
+                    : <span className="text-xl leading-none">{menu.customIcon}</span>
                   : ICON[menu.icon]}
                 {/* 비로그인 + 제한 메뉴에 자물쇠 뱃지 */}
                 {!user && !isPublic && (
@@ -1493,6 +1495,20 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           </button>
         );
       })}
+
+      {/* 비소유자 전용: 메인 복귀 + 별자리 만들기 */}
+      {!isOwner && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
+          <a href="/"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full backdrop-blur-sm border border-white/15 bg-black/40 text-white/55 text-xs font-medium hover:bg-black/60 hover:text-white transition-colors whitespace-nowrap">
+            <ChevronLeft size={12} />우주 탐험으로
+          </a>
+          <a href={user ? "/private/create/universe" : "/signup"}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full backdrop-blur-sm border border-violet-400/40 bg-violet-500/20 text-violet-300 text-xs font-medium hover:bg-violet-500/35 hover:text-white transition-colors whitespace-nowrap">
+            <Sparkles size={12} />나만의 별자리 만들기
+          </a>
+        </div>
+      )}
 
       {/* 하단 액션 + BGM 플레이어 */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
@@ -1527,7 +1543,13 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           <div className="w-full sm:max-w-md bg-[#0b1026] border border-white/10 rounded-t-3xl sm:rounded-3xl p-6 m-0 sm:m-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4 shrink-0">
               <div className="flex items-center gap-2 text-white">
-                <span style={{ color: data.color }}>{openMenu.customIcon ? <span className="text-lg">{openMenu.customIcon}</span> : ICON[openMenu.icon]}</span>
+                <span style={{ color: data.color }}>
+                  {openMenu.customIcon
+                    ? (openMenu.customIcon.startsWith("http") || openMenu.customIcon.startsWith("/"))
+                      ? <img src={openMenu.customIcon} alt="" className="w-6 h-6 rounded-full object-cover" />
+                      : <span className="text-lg">{openMenu.customIcon}</span>
+                    : ICON[openMenu.icon]}
+                </span>
                 <h2 className="font-bold text-lg">{openMenu.label}</h2>
               </div>
               <button onClick={() => setOpenMenu(null)} className="text-white/50 hover:text-white"><X size={20} /></button>

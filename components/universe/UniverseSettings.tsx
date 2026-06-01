@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { updatePersonal } from "@/lib/firebase/personals";
-import { uploadPersonalAudio } from "@/lib/firebase/storage";
+import { uploadPersonalAudio, uploadPersonalImage } from "@/lib/firebase/storage";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
 import type { UniverseAsset } from "@/lib/types/asset";
 import type { UniverseIconType } from "@/lib/types/personal";
@@ -52,18 +52,32 @@ const EMOJI_PRESETS = [
   "🎤","🎹","🎸","☕","🌊","🏔️","🎭","🎪",
 ];
 
-function MenuIconEditor({ menus, onChange }: {
+function MenuIconEditor({ menus, personalId, onChange }: {
   menus: MenuNode[];
+  personalId: string;
   onChange: (updated: MenuNode[]) => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [customText, setCustomText] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const imgInputRef = useRef<HTMLInputElement>(null);
 
   const editingMenu = menus.find((m) => m.id === editingId);
 
   const apply = (emoji: string) => {
     onChange(menus.map((m) => m.id === editingId ? { ...m, customIcon: emoji } : m));
     setEditingId(null);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingId) return;
+    setUploading(true);
+    try {
+      const url = await uploadPersonalImage(personalId, "gallery", file);
+      apply(url);
+    } catch { alert("이미지 업로드에 실패했습니다."); }
+    finally { setUploading(false); e.target.value = ""; }
   };
 
   const reset = () => {
@@ -75,21 +89,26 @@ function MenuIconEditor({ menus, onChange }: {
     <div className="space-y-3">
       <p className="text-xs text-white/50">메뉴 아이콘을 원하는 이모지로 바꿀 수 있어요.</p>
       <div className="grid grid-cols-3 gap-2">
-        {menus.map((menu) => (
-          <button key={menu.id} onClick={() => { setEditingId(menu.id); setCustomText(""); }}
-            className={cn(
-              "flex flex-col items-center gap-1.5 py-3 rounded-2xl border transition-all",
-              editingId === menu.id
-                ? "border-violet-400 bg-violet-500/20"
-                : "border-white/10 bg-white/5 hover:border-violet-400/40"
-            )}>
-            <span className="text-2xl leading-none">{menu.customIcon ?? ICON_MAP[menu.id] ?? "⭐"}</span>
-            <span className="text-[10px] text-white/50 truncate w-full text-center px-1">{menu.label}</span>
-            {menu.customIcon && (
-              <span className="text-[8px] text-violet-400/70">커스텀</span>
-            )}
-          </button>
-        ))}
+        {menus.map((menu) => {
+          const icon = menu.customIcon;
+          const isUrl = icon?.startsWith("http") || icon?.startsWith("/");
+          return (
+            <button key={menu.id} onClick={() => { setEditingId(menu.id); setCustomText(""); }}
+              className={cn(
+                "flex flex-col items-center gap-1.5 py-3 rounded-2xl border transition-all",
+                editingId === menu.id
+                  ? "border-violet-400 bg-violet-500/20"
+                  : "border-white/10 bg-white/5 hover:border-violet-400/40"
+              )}>
+              {isUrl
+                ? <img src={icon} alt="" className="w-8 h-8 rounded-full object-cover" />
+                : <span className="text-2xl leading-none">{icon ?? ICON_MAP[menu.id] ?? "⭐"}</span>
+              }
+              <span className="text-[10px] text-white/50 truncate w-full text-center px-1">{menu.label}</span>
+              {icon && <span className="text-[8px] text-violet-400/70">커스텀</span>}
+            </button>
+          );
+        })}
       </div>
 
       {editingId && editingMenu && (
@@ -111,11 +130,20 @@ function MenuIconEditor({ menus, onChange }: {
               </button>
             ))}
           </div>
-          {/* 직접 입력 */}
-          <div className="flex gap-2 pt-1">
+          {/* 이미지 업로드 */}
+          <button onClick={() => imgInputRef.current?.click()} disabled={uploading}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-dashed border-white/20 text-white/40 text-xs hover:border-violet-400 hover:text-violet-400 transition-colors">
+            {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+            {uploading ? "업로드 중..." : "이미지 업로드"}
+          </button>
+          <input ref={imgInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+
+          {/* 이모지 직접 입력 */}
+          <div className="flex gap-2">
             <input
               value={customText}
               onChange={(e) => setCustomText(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && customText.trim() && apply(customText.trim())}
               placeholder="이모지 직접 입력..."
               maxLength={4}
               className="flex-1 px-3 py-1.5 rounded-xl bg-white/8 border border-white/15 text-sm text-white placeholder-white/25 focus:border-violet-400 focus:outline-none"
@@ -145,6 +173,7 @@ type ViewMode = "desktop" | "mobile";
 function LayoutTab({
   menus,
   onMenusChange,
+  personalId,
   layout,
   layoutMobile,
   onLayoutChange,
@@ -158,6 +187,7 @@ function LayoutTab({
 }: {
   menus: MenuNode[];
   onMenusChange: (menus: MenuNode[]) => void;
+  personalId: string;
   layout: Record<string, { top: string; left: string }>;
   layoutMobile: Record<string, { top: string; left: string }>;
   onLayoutChange: (v: Record<string, { top: string; left: string }>) => void;
@@ -212,7 +242,7 @@ function LayoutTab({
       {/* 메뉴 아이콘 커스터마이징 */}
       <div className="space-y-2">
         <p className="text-xs text-white/35 uppercase tracking-wider font-semibold">메뉴 아이콘</p>
-        <MenuIconEditor menus={menus} onChange={onMenusChange} />
+        <MenuIconEditor menus={menus} personalId={personalId} onChange={onMenusChange} />
       </div>
 
       <div className="border-t border-white/10 pt-4 space-y-3">
@@ -654,6 +684,7 @@ export function UniverseSettings({
             <LayoutTab
               menus={state.menus}
               onMenusChange={(menus) => setState((p) => ({ ...p, menus }))}
+              personalId={personalId}
               layout={state.menuLayout}
               layoutMobile={state.menuLayoutMobile}
               onLayoutChange={(v) => setState((p) => ({ ...p, menuLayout: v }))}

@@ -9,7 +9,7 @@ import {
 } from "@/lib/universe/stars";
 import type { Constellation } from "@/lib/universe/stars";
 import { useAuthStore } from "@/lib/store/authStore";
-import { Sparkles, LogIn, LayoutDashboard } from "lucide-react";
+import { Sparkles, LogIn, LayoutDashboard, ArrowRight } from "lucide-react";
 
 /* ─── 타입 ─────────────────────────────────────── */
 
@@ -77,6 +77,20 @@ function computePositions(universes: UniverseItem[]): Map<string, { cx: number; 
   return result;
 }
 
+/* ─── 방향 이름 ─────────────────────────────────── */
+
+function directionName(angle: number): string {
+  const deg = ((angle * 180 / Math.PI) + 360) % 360;
+  if (deg < 22.5 || deg >= 337.5) return "동쪽";
+  if (deg < 67.5) return "남동쪽";
+  if (deg < 112.5) return "남쪽";
+  if (deg < 157.5) return "남서쪽";
+  if (deg < 202.5) return "서쪽";
+  if (deg < 247.5) return "북서쪽";
+  if (deg < 292.5) return "북쪽";
+  return "북동쪽";
+}
+
 /* ─── 메인 컴포넌트 ─────────────────────────────── */
 
 export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
@@ -97,11 +111,21 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const hoveredRef = useRef<string | null>(null);
 
-  /* 첫 방문 힌트 */
+  /* 첫 방문 드래그 힌트 */
   const [showHint, setShowHint] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setShowHint(false), 4000);
     return () => clearTimeout(t);
+  }, []);
+
+  /* 뷰포트 크기 */
+  const [vw, setVw] = useState(0);
+  const [vh, setVh] = useState(0);
+  useEffect(() => {
+    const update = () => { setVw(window.innerWidth); setVh(window.innerHeight); };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
   }, []);
 
   /* 노드 계산 */
@@ -369,6 +393,29 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     [nodes, hoveredId]
   );
 
+  /* 현재 뷰포트에 보이는 별자리 여부 + 가장 가까운 별자리 방향 */
+  const nearestHint = useMemo(() => {
+    if (nodes.length === 0 || vw === 0) return null;
+    const margin = CELL + 60;
+    const hasVisible = nodes.some((n) => {
+      const sx = n.cx - camSnap.x + vw / 2;
+      const sy = n.cy - camSnap.y + vh / 2;
+      return sx > -margin && sx < vw + margin && sy > -margin && sy < vh + margin;
+    });
+    if (hasVisible) return null;
+
+    // 가장 가까운 별자리 찾기
+    let nearest = nodes[0];
+    let minDist = Infinity;
+    for (const n of nodes) {
+      const d = Math.hypot(n.cx - camSnap.x, n.cy - camSnap.y);
+      if (d < minDist) { minDist = d; nearest = n; }
+    }
+    const angle = Math.atan2(nearest.cy - camSnap.y, nearest.cx - camSnap.x);
+    const lightyears = Math.max(1, Math.round(minDist / 12));
+    return { angle, lightyears, name: nearest.item.name };
+  }, [nodes, camSnap, vw, vh]);
+
   /* 호버 툴팁 화면 위치 */
   const tooltipPos = useMemo(() => {
     if (!hoveredNode || typeof window === "undefined") return null;
@@ -445,15 +492,54 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
         </div>
       )}
 
-      {/* 탐험 힌트 */}
+      {/* 드래그 안내 힌트 (첫 4초) */}
       <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 transition-opacity duration-1000"
-        style={{ opacity: showHint ? 1 : 0 }}
+        style={{ opacity: showHint && universes.length > 0 && !nearestHint ? 1 : 0 }}
       >
         <p className="text-white/20 text-sm tracking-widest uppercase select-none text-center">
           드래그해서 우주를 탐험하세요
         </p>
       </div>
+
+      {/* 완전 빈 우주 (등록된 별자리 없음) */}
+      {universes.length === 0 && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-4 text-center px-6">
+            <div className="w-16 h-16 rounded-full border border-white/10 bg-white/5 flex items-center justify-center mb-2">
+              <Sparkles size={24} className="text-white/20" />
+            </div>
+            <p className="text-white/40 text-lg font-light tracking-wide">아직 아무도 없는 우주예요</p>
+            <p className="text-white/20 text-sm leading-relaxed max-w-xs">
+              지금 당신이 첫 번째 별자리를 새기면<br />이 우주 전체가 당신의 것이 됩니다
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 현재 화면에 별자리 없음 → 방향 힌트 */}
+      {nearestHint && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-3">
+            {/* 방향 화살표 */}
+            <div
+              className="w-10 h-10 flex items-center justify-center animate-pulse"
+              style={{ transform: `rotate(${nearestHint.angle}rad)` }}
+            >
+              <ArrowRight size={28} className="text-white/25" />
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-white/30 text-sm">
+                <span className="text-white/50 font-medium">{directionName(nearestHint.angle)}</span>으로 약{" "}
+                <span className="text-white/50 font-medium">{nearestHint.lightyears}광년</span>만 더 드래그하면
+              </p>
+              <p className="text-white/20 text-xs">
+                누군가의 별자리가 나타납니다
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 하단 CTA */}
       <div className="absolute bottom-8 inset-x-0 flex flex-col items-center gap-3 z-20 pointer-events-none">
