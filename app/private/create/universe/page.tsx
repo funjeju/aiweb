@@ -73,7 +73,8 @@ export default function UniverseCreatePage() {
 
     try {
       const id = generatePersonalId(name);
-      const targetUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/p/${id}`;
+      // window.location.origin: 항상 현재 배포 도메인 사용 (env 설정 불필요)
+      const targetUrl = `${window.location.origin}/p/${id}`;
       const slugToRegister = derivedSlug || id;
       const regResult = await registerSlug({ slug: slugToRegister, target_url: targetUrl, owner_id: user.uid });
 

@@ -9,7 +9,11 @@ export async function POST(req: NextRequest) {
   const REGISTRY_KEY        = process.env.NEXT_PUBLIC_SLUG_REGISTRY_KEY ?? "";
   // NEXT_PUBLIC_SLUG_DOMAIN = 베이스 도메인 (https 포함)
   const SLUG_DOMAIN         = (process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "https://study.funjeju.com").replace(/\/$/, "");
-  const APP_URL             = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+  // NEXT_PUBLIC_APP_URL 없으면 Vercel 자동 제공 VERCEL_URL 폴백
+  const APP_URL = (
+    process.env.NEXT_PUBLIC_APP_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "")
+  ).replace(/\/$/, "");
 
   console.log("[slug/fix] ENV CHECK:", {
     REGISTRY_CREATE_URL: REGISTRY_CREATE_URL || "(비어있음)",
