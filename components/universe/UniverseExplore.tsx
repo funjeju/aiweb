@@ -554,7 +554,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
               <LayoutDashboard size={13} />내 대시보드
             </Link>
           ) : (
-            <Link href="/login"
+            <Link href="/login?from=/private"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/60 text-xs font-medium hover:bg-white/10 hover:text-white transition-colors">
               <LogIn size={13} />로그인
             </Link>
@@ -686,7 +686,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
           </Link>
         ) : (
           <Link
-            href={user ? "/private/create/universe" : "/signup"}
+            href={user ? "/private" : "/signup?from=/private"}
             className="pointer-events-auto flex items-center gap-2 px-7 py-3.5 rounded-full font-bold text-white text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-violet-900/40 select-none"
             style={{ background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)" }}
           >

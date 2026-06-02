@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signInWithGoogle, signUpWithEmail, getGoogleRedirectResult } from "@/lib/firebase/auth";
 import { Sparkles, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export default function SignupPage() {
+function SignupContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const from = searchParams.get("from") || "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -16,16 +18,16 @@ export default function SignupPage() {
 
   useEffect(() => {
     getGoogleRedirectResult()
-      .then((result) => { if (result?.user) router.replace("/dashboard"); })
+      .then((result) => { if (result?.user) router.replace(from); })
       .catch(() => {});
-  }, [router]);
+  }, [router, from]);
 
   const handleGoogle = async () => {
     setLoading(true);
     setError("");
     try {
       await signInWithGoogle();
-      router.push("/dashboard");
+      router.push(from);
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message || "";
       if (!msg.includes("redirect")) {
@@ -43,7 +45,7 @@ export default function SignupPage() {
     setError("");
     try {
       await signUpWithEmail(email, password);
-      router.push("/dashboard");
+      router.push(from);
     } catch {
       setError("이미 사용 중인 이메일이거나 오류가 발생했습니다.");
     } finally {
@@ -115,9 +117,17 @@ export default function SignupPage() {
 
         <p className="text-center text-sm text-gray-500 mt-4">
           이미 계정이 있으신가요?{" "}
-          <Link href="/login" className="text-indigo-500 font-semibold">로그인</Link>
+          <Link href={`/login?from=${encodeURIComponent(from)}`} className="text-indigo-500 font-semibold">로그인</Link>
         </p>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupContent />
+    </Suspense>
   );
 }

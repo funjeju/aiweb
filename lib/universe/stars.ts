@@ -116,22 +116,33 @@ function projectStars(chosen: RealStar[]): ConstellationStar[] {
   }));
 }
 
-/** 최근접 이웃 체인으로 별자리 선 연결 (실제 위치 기준) */
-function buildLinks(stars: ConstellationStar[]): Array<[number, number]> {
+/**
+ * 시드 기반 랜덤 트리로 별자리 선 연결.
+ * - 각 별이 이미 연결된 별들 중 하나에서 뻗어나오는 트리 구조
+ * - 분기가 자연스럽게 생겨 국자/Y자/별 모양 등 다양한 형태 생성
+ */
+function buildLinks(stars: ConstellationStar[], rng: () => number): Array<[number, number]> {
   const links: Array<[number, number]> = [];
-  const used = new Set<number>([0]);
-  let current = 0;
-  while (used.size < stars.length) {
-    let best = -1, bestD = Infinity;
-    for (let j = 0; j < stars.length; j++) {
-      if (used.has(j)) continue;
-      const d = (stars[j].x - stars[current].x) ** 2 + (stars[j].y - stars[current].y) ** 2;
-      if (d < bestD) { bestD = d; best = j; }
-    }
-    if (best === -1) break;
-    links.push([current, best]);
-    used.add(best);
-    current = best;
+  const connected = [0]; // 이미 트리에 포함된 인덱스들
+  const remaining = stars.map((_, i) => i).slice(1);
+
+  while (remaining.length > 0) {
+    // 아직 연결 안 된 별 중 하나를 랜덤 선택
+    const ri = Math.floor(rng() * remaining.length);
+    const next = remaining.splice(ri, 1)[0];
+
+    // 이미 연결된 별들 중 가까운 상위 3개 안에서 랜덤으로 부모 선택 (분기 생성)
+    const candidates = connected
+      .map((ci) => ({
+        ci,
+        d: (stars[next].x - stars[ci].x) ** 2 + (stars[next].y - stars[ci].y) ** 2,
+      }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 3);
+
+    const parent = candidates[Math.floor(rng() * candidates.length)].ci;
+    links.push([parent, next]);
+    connected.push(next);
   }
   return links;
 }
@@ -142,14 +153,17 @@ function buildLinks(stars: ConstellationStar[]): Array<[number, number]> {
  */
 export function generateConstellationFromSeed(seed: number, color: string, starPool?: RealStar[]): Constellation {
   const rng = mulberry32(seed);
-  const count = 5 + Math.floor(rng() * 4);
   const pool = [...(starPool ?? BRIGHT_STARS)];
+  // 풀 크기에 따라 별 개수 범위 조정 (최소 4, 최대 9)
+  const maxCount = Math.min(9, Math.max(4, Math.floor(pool.length * 0.25)));
+  const minCount = Math.min(4, maxCount);
+  const count = minCount + Math.floor(rng() * (maxCount - minCount + 1));
   const chosen: RealStar[] = [];
   for (let i = 0; i < count && pool.length; i++) {
     chosen.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
   }
   const stars = projectStars(chosen);
-  const links = buildLinks(stars);
+  const links = buildLinks(stars, rng);
   return { seed, stars, links, primaryColor: color };
 }
 

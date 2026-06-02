@@ -54,36 +54,33 @@ export default function UniverseCreatePage() {
     if (!authLoading && !user) router.replace("/login?from=/private/create/universe");
   }, [user, authLoading, router]);
 
-  const fetchStarPool = async (s: Season) => {
+  const poolFetchedForName = useRef<string>("");
+
+  // 닉네임 확정(blur 또는 엔터) 시 딱 1회 AI 호출
+  const fetchStarPool = async (nameVal: string) => {
+    if (!nameVal.trim() || poolFetchedForName.current === nameVal.trim()) return;
+    poolFetchedForName.current = nameVal.trim();
     setStarPoolLoading(true);
     try {
       const res = await fetch("/api/universe/stars", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ season: s }),
+        body: JSON.stringify({ name: nameVal.trim() }),
       });
       if (res.ok) {
         const data = await res.json();
         setStarPool(data.stars);
       }
     } catch {
-      // 실패 시 기존 하드코딩 풀 사용 (starPool = undefined)
+      // 실패 시 기존 하드코딩 풀 사용
     } finally {
       setStarPoolLoading(false);
     }
   };
 
   const handleSeasonChange = (s: Season) => {
-    setSeason(s);
-    setStarPool(undefined);
-    fetchStarPool(s);
+    setSeason(s); // 계절은 스토리만 — AI 호출 없음
   };
-
-  // 최초 마운트 시 기본 계절로 별 풀 로드
-  useEffect(() => {
-    if (user) fetchStarPool(season);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
 
   const derivedSlug = slugInput || normalizeSlug(name) || "";
 
@@ -198,7 +195,10 @@ export default function UniverseCreatePage() {
         <div className="space-y-5">
           <div>
             <label className="block text-sm font-semibold mb-2">닉네임</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 밤하늘별이"
+            <input value={name} onChange={(e) => setName(e.target.value)}
+              onBlur={(e) => fetchStarPool(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && fetchStarPool(name)}
+              placeholder="예: 밤하늘별이"
               className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/15 focus:border-violet-400 focus:outline-none text-white placeholder-white/30" />
           </div>
 

@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const { season } = await req.json();
+    const { name } = await req.json();
     const ip =
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       req.headers.get("x-real-ip") ||
@@ -17,33 +17,31 @@ export async function POST(req: NextRequest) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
       model: "gemini-flash-latest",
-      generationConfig: { temperature: 0.2 },
+      generationConfig: { temperature: 0.3 },
     });
 
     const prompt = `You are an astronomy expert.
 The user's IP address is: ${ip}
-Their favorite season is: ${season}
+The user's nickname is: ${name || "unknown"}
 
-Based on the IP address, determine the approximate country/region (city-level precision is not needed).
-Then list 12 to 20 real circumpolar stars visible year-round from that location (stars that never set below the horizon).
+Step 1: Based on the IP address, determine the approximate country/region (city-level precision is NOT needed — country or broad region is enough).
+Step 2: For that latitude, list 30 to 40 real circumpolar stars that are visible year-round (stars that never set below the horizon). A star is circumpolar if its declination > (latitude - 90°).
 
-Return ONLY a valid JSON array. No explanation, no markdown, no code block. Example format:
-[{"name":"Polaris","ra":37.9,"dec":89.3,"mag":1.98},...]
+Return ONLY a valid JSON array. No explanation, no markdown, no code block.
+Format: [{"name":"Polaris","ra":37.9,"dec":89.3,"mag":1.98},...]
 
 Rules:
-- Only include stars with magnitude < 3.5 (bright enough to see with naked eye)
-- Include the star's Korean name if well-known, otherwise use the common English name
-- Ensure dec values make the star truly circumpolar for the detected latitude
-- Return between 12 and 20 stars`;
+- Only include stars with magnitude < 4.0
+- Use the star's Korean name if well-known (e.g. 폴라리스, 두브헤), otherwise use common English name
+- Strictly ensure all stars satisfy the circumpolar condition for the detected latitude
+- Return between 30 and 40 stars`;
 
     const result = await model.generateContent(prompt);
     const raw = result.response.text().trim();
-
-    // JSON 파싱 — 혹시 마크다운 코드블록이 있으면 제거
     const cleaned = raw.replace(/```json|```/g, "").trim();
     const stars = JSON.parse(cleaned);
 
-    return NextResponse.json({ stars, season });
+    return NextResponse.json({ stars });
   } catch (e) {
     console.error("[universe/stars]", e);
     return NextResponse.json({ error: String(e) }, { status: 500 });
