@@ -146,6 +146,17 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
   /* 핀치 줌 */
   const lastPinchDist = useRef<number | null>(null);
 
+  /* 워프 */
+  const warpRef = useRef<{
+    active: boolean;
+    phase: "stretching" | "traveling" | "arriving";
+    progress: number; // 0~1
+    fromX: number; fromY: number;
+    toX: number; toY: number;
+    startTime: number;
+  } | null>(null);
+  const [warping, setWarping] = useState(false);
+
   /* 호버 */
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const hoveredRef = useRef<string | null>(null);
@@ -209,6 +220,21 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     setCamSnap({ ...camRef.current });
   }, []);
 
+  /* 워프 실행 */
+  const startWarp = useCallback((toX: number, toY: number) => {
+    if (warpRef.current?.active) return;
+    warpRef.current = {
+      active: true,
+      phase: "stretching",
+      progress: 0,
+      fromX: camRef.current.x,
+      fromY: camRef.current.y,
+      toX, toY,
+      startTime: performance.now(),
+    };
+    setWarping(true);
+  }, []);
+
   /* RAF 렌더 */
   const animRef = useRef(0);
   const render = useCallback(() => {
@@ -252,6 +278,42 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     const tilesX = Math.ceil(W / tileW) + 2;
     const tilesY = Math.ceil(H / tileH) + 2;
 
+    /* 워프 진행 */
+    const warp = warpRef.current;
+    let warpStretch = 0; // 0 = 점, 1 = 최대 늘어남
+    if (warp?.active) {
+      const elapsed = (t - warp.startTime) / 1000;
+      if (warp.phase === "stretching") {
+        warpStretch = Math.min(1, elapsed / 0.4);
+        if (elapsed > 0.4) {
+          warp.phase = "traveling";
+          warp.startTime = t;
+        }
+      } else if (warp.phase === "traveling") {
+        warpStretch = 1;
+        const progress = Math.min(1, elapsed / 0.6);
+        // easeInOut
+        const ease = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
+        camRef.current = {
+          x: warp.fromX + (warp.toX - warp.fromX) * ease,
+          y: warp.fromY + (warp.toY - warp.fromY) * ease,
+        };
+        setCamSnap({ ...camRef.current });
+        if (elapsed > 0.6) {
+          warp.phase = "arriving";
+          warp.startTime = t;
+          camRef.current = { x: warp.toX, y: warp.toY };
+          setCamSnap({ x: warp.toX, y: warp.toY });
+        }
+      } else if (warp.phase === "arriving") {
+        warpStretch = Math.max(0, 1 - elapsed / 0.4);
+        if (elapsed > 0.4) {
+          warpRef.current = null;
+          setWarping(false);
+        }
+      }
+    }
+
     for (let tx = -1; tx < tilesX; tx++) {
       for (let ty = -1; ty < tilesY; ty++) {
         const tileAbsX = Math.floor((camX * zoom - offX) / tileW) + tx + 1;
@@ -263,9 +325,26 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
           const alpha = s.base + s.amp * Math.sin(t * 0.001 * s.speed + s.phase);
           ctx.globalAlpha = Math.max(0, alpha);
           ctx.fillStyle = "#e8ecff";
-          ctx.beginPath();
-          ctx.arc(px, py, s.r, 0, Math.PI * 2);
-          ctx.fill();
+
+          if (warpStretch > 0) {
+            // 별을 화면 중심 기준으로 방사형으로 늘어나게
+            const dx = px - W / 2;
+            const dy = py - H / 2;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const stretch = 1 + warpStretch * 25 * (len / (Math.max(W, H) * 0.5));
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(Math.atan2(dy, dx));
+            ctx.scale(stretch, 1);
+            ctx.beginPath();
+            ctx.arc(0, 0, s.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          } else {
+            ctx.beginPath();
+            ctx.arc(px, py, s.r, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
     }
@@ -516,6 +595,8 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       name: s.node.item.name,
       opacity: 0.3 + 0.7 * (1 - s.dist / maxDist),
       scale: 0.6 + 0.4 * (1 - s.dist / maxDist),
+      toX: s.node.cx,
+      toY: s.node.cy,
     }));
   }, [nodes, camSnap, vw, vh, zoomSnap]);
 
@@ -645,12 +726,13 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
           <div
             className="flex flex-col items-center gap-3"
             style={{
-              opacity: hint.opacity,
+              opacity: warping ? 0 : hint.opacity,
               transform: `scale(${hint.scale})`,
               position: "absolute",
               left: `calc(50% + ${Math.cos(hint.angle) * 110}px)`,
               top: `calc(50% + ${Math.sin(hint.angle) * 110}px)`,
               translate: "-50% -50%",
+              transition: "opacity 0.3s",
             }}
           >
             <div
@@ -667,6 +749,12 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
               </p>
               <p className="text-white/40 text-xs whitespace-nowrap">{hint.name}</p>
             </div>
+            <button
+              className="pointer-events-auto flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold text-white border border-white/20 bg-white/10 hover:bg-white/20 active:scale-95 transition-all whitespace-nowrap backdrop-blur-sm"
+              onClick={() => startWarp(hint.toX, hint.toY)}
+            >
+              🚀 워프
+            </button>
           </div>
         </div>
       ))}
