@@ -1440,6 +1440,12 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       {/* 우상단: 언어 토글 + 설정/로그인 버튼 */}
       <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
         <LangToggle lang={lang} loading={langLoading} onSwitch={switchLang} theme="dark" />
+        {user && (
+          <a href="/"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white transition-colors">
+            <Sparkles size={13} />우주 탐험
+          </a>
+        )}
         {isOwner && (
           <button onClick={() => setShowSettings(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white transition-colors">
@@ -1646,7 +1652,11 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           bgmPlaying={bgmPlaying}
           onToggleBgm={toggleBgm}
           onClose={() => setShowSettings(false)}
-          onSaved={handleSettingsSaved}
+          initialColor={data.color}
+          onSaved={(s) => {
+            handleSettingsSaved(s);
+            if (s.color !== data.color) setData((prev) => ({ ...prev, color: s.color }));
+          }}
         />
       )}
     </div>

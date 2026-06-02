@@ -514,7 +514,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     const maxDist = sorted[sorted.length - 1]?.dist ?? 1;
     return sorted.map((s) => ({
       angle: s.angle,
-      lightyears: Math.min(10, Math.max(1, Math.round(s.dist / 120))),
+      lightyears: Math.min(3, Math.max(1, Math.round(s.dist / 120))),
       name: s.node.item.name,
       opacity: 0.3 + 0.7 * (1 - s.dist / maxDist),
       scale: 0.6 + 0.4 * (1 - s.dist / maxDist),
@@ -645,14 +645,13 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
           className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"
         >
           <div
-            className="flex flex-col items-center gap-2"
+            className="flex flex-col items-center gap-3"
             style={{
               opacity: hint.opacity,
               transform: `scale(${hint.scale})`,
-              // 각 힌트를 중앙에서 방향별로 오프셋
               position: "absolute",
-              left: `calc(50% + ${Math.cos(hint.angle) * 80}px)`,
-              top: `calc(50% + ${Math.sin(hint.angle) * 80}px)`,
+              left: `calc(50% + ${Math.cos(hint.angle) * 110}px)`,
+              top: `calc(50% + ${Math.sin(hint.angle) * 110}px)`,
               translate: "-50% -50%",
             }}
           >
@@ -660,15 +659,15 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
               className="flex items-center justify-center animate-pulse"
               style={{ transform: `rotate(${hint.angle}rad)` }}
             >
-              <svg width={Math.round(20 + hint.scale * 12)} height={Math.round(20 + hint.scale * 12)} viewBox="0 0 24 24" fill="none">
-                <path d="M5 12h14M13 6l6 6-6 6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <svg width={Math.round(32 + hint.scale * 16)} height={Math.round(32 + hint.scale * 16)} viewBox="0 0 24 24" fill="none">
+                <path d="M5 12h14M13 6l6 6-6 6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <div className="text-center space-y-0.5">
-              <p className="text-white/60 text-[11px] font-medium whitespace-nowrap">
+            <div className="text-center space-y-1">
+              <p className="text-white/70 text-sm font-semibold whitespace-nowrap">
                 {directionName(hint.angle)} {hint.lightyears}광년
               </p>
-              <p className="text-white/30 text-[10px] whitespace-nowrap">{hint.name}</p>
+              <p className="text-white/40 text-xs whitespace-nowrap">{hint.name}</p>
             </div>
           </div>
         </div>

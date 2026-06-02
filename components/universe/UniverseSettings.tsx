@@ -8,11 +8,11 @@ import type { UniverseAsset } from "@/lib/types/asset";
 import type { UniverseIconType } from "@/lib/types/personal";
 import {
   X, Loader2, Check, Music, Layers, LayoutGrid,
-  Upload, Play, Pause, Trash2, Volume2, Smile,
+  Upload, Play, Pause, Trash2, Volume2, Smile, Palette,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Tab = "assets" | "bgm" | "layout";
+type Tab = "assets" | "bgm" | "layout" | "color";
 
 interface MenuNode { id: string; label: string; icon: UniverseIconType; customIcon?: string; }
 
@@ -26,7 +26,14 @@ interface SettingsState {
   menuLayoutMobile: Record<string, { top: string; left: string }>;
   assetPositions: Record<string, { top: string; left: string }>;
   assetPositionsMobile: Record<string, { top: string; left: string }>;
+  color: string;
 }
+
+const COLOR_PRESETS = [
+  "#a78bfa", "#60a5fa", "#f472b6", "#34d399",
+  "#fbbf24", "#f87171", "#22d3ee", "#c084fc",
+  "#fb923c", "#4ade80", "#e879f9", "#38bdf8",
+];
 
 const DEFAULT_POS = [
   { top: "18%", left: "50%" },
@@ -570,6 +577,7 @@ export function UniverseSettings({
   allAssets = DEFAULT_ASSETS,
   profilePhotoUrl,
   bgmPlaying,
+  initialColor = "#a78bfa",
   onToggleBgm,
   onClose,
   onSaved,
@@ -588,6 +596,7 @@ export function UniverseSettings({
   onToggleBgm: () => void;
   onClose: () => void;
   onSaved: (state: SettingsState) => void;
+  initialColor?: string;
 }) {
   const [tab, setTab] = useState<Tab>("assets");
   const [saving, setSaving] = useState(false);
@@ -599,6 +608,7 @@ export function UniverseSettings({
     menuLayoutMobile:     initialLayoutMobile         ?? {},
     assetPositions:       initialAssetPositions       ?? {},
     assetPositionsMobile: initialAssetPositionsMobile ?? {},
+    color: initialColor,
   });
 
   const save = async () => {
@@ -614,6 +624,7 @@ export function UniverseSettings({
         "universe.selectedAssets": state.selectedAssets,
         "universe.bgmList": state.bgmList,
         "universe.menus": state.menus,
+        "universe.color": state.color,
       };
 
       if (Object.keys(state.menuLayout).length > 0)
@@ -638,6 +649,7 @@ export function UniverseSettings({
     { id: "assets",  label: "에셋",   icon: <Layers size={14} /> },
     { id: "bgm",     label: "BGM",    icon: <Music size={14} /> },
     { id: "layout",  label: "레이아웃", icon: <LayoutGrid size={14} /> },
+    { id: "color",   label: "별자리색", icon: <Palette size={14} /> },
   ];
 
   return (
@@ -696,6 +708,36 @@ export function UniverseSettings({
               onAssetPosMobileChange={(v) => setState((p) => ({ ...p, assetPositionsMobile: v }))}
               allAssets={allAssets}
             />
+          )}
+          {tab === "color" && (
+            <div className="space-y-5 py-2">
+              <p className="text-white/40 text-xs leading-relaxed">
+                별자리 모양은 유지하면서 색깔만 바꿀 수 있어요.
+              </p>
+              {/* 미리보기 */}
+              <div className="flex items-center justify-center py-4">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: `${state.color}22`, boxShadow: `0 0 32px ${state.color}66` }}>
+                  <span className="text-2xl">✦</span>
+                </div>
+              </div>
+              {/* 프리셋 */}
+              <div className="grid grid-cols-6 gap-2">
+                {COLOR_PRESETS.map((c) => (
+                  <button key={c} onClick={() => setState((p) => ({ ...p, color: c }))}
+                    className={cn("w-full aspect-square rounded-full transition-transform",
+                      state.color === c ? "ring-2 ring-white scale-110" : "hover:scale-105")}
+                    style={{ backgroundColor: c }} />
+                ))}
+              </div>
+              {/* 커스텀 컬러 */}
+              <div className="flex items-center gap-3">
+                <input type="color" value={state.color}
+                  onChange={(e) => setState((p) => ({ ...p, color: e.target.value }))}
+                  className="w-10 h-10 rounded-full border border-white/20 cursor-pointer bg-transparent" />
+                <span className="text-white/50 text-xs font-mono">{state.color}</span>
+              </div>
+            </div>
           )}
         </div>
 
