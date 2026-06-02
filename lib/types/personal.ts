@@ -106,6 +106,14 @@ export interface PersonalSchema {
     selectedAssets?: string[];
     /** 별자리 시드 — 최초 생성 시 한 번 저장, 이후 고정 */
     constellationSeed?: number;
+    /** 즐겨찾기한 별자리 친구 목록 */
+    savedConstellations?: Array<{
+      id: string;
+      name: string;
+      color: string;
+      constellationSeed?: number;
+      savedAt: string;
+    }>;
     /** 별자리 계절 — 스토리/정체성용 */
     constellationSeason?: "spring" | "summer" | "autumn" | "winter";
     /** 별자리 별 풀 — IP 기반 AI가 생성한 주극성 목록 */

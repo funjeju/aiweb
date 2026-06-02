@@ -10,7 +10,7 @@ import { UniverseSettings } from "./UniverseSettings";
 import { generateConstellation, generateConstellationFromSeed } from "@/lib/universe/stars";
 import { getStarLore } from "@/lib/universe/star-lore";
 import type { ConstellationStar } from "@/lib/universe/stars";
-import { getPublishedUniverses, updatePersonal, getPersonalById } from "@/lib/firebase/personals";
+import { getPublishedUniverses, updatePersonal, getPersonalById, getPersonalsByOwner } from "@/lib/firebase/personals";
 import { getStarComments, addStarComment, deleteStarComment } from "@/lib/firebase/starComments";
 import type { StarComment } from "@/lib/firebase/starComments";
 import { uploadPersonalImage } from "@/lib/firebase/storage";
@@ -26,7 +26,7 @@ import {
   Github, Instagram, Linkedin, Globe, Mail,
   ChevronLeft, ChevronRight, Pencil, Plus, Check, Settings,
   Play, Pause, LogIn, Send, Lock, MessageCircle, PenLine, Trash2,
-  Calendar, Search, Volume2,
+  Calendar, Search, Volume2, Star,
 } from "lucide-react";
 import type { DiaryEntry, DiaryEmotion } from "@/lib/types/personal";
 import { cn } from "@/lib/utils";
@@ -1503,6 +1503,15 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-full backdrop-blur-sm border border-white/15 bg-black/40 text-white/55 text-xs font-medium hover:bg-black/60 hover:text-white transition-colors whitespace-nowrap">
             <ChevronLeft size={12} />우주 탐험으로
           </a>
+          {user && data.personalId && (
+            <SaveConstellationButton
+              targetId={data.personalId}
+              targetName={data.name}
+              targetColor={data.color}
+              targetSeed={data.constellationSeed}
+              viewerUid={user.uid}
+            />
+          )}
           <a href={user ? "/private/create/universe" : "/signup"}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-full backdrop-blur-sm border border-violet-400/40 bg-violet-500/20 text-violet-300 text-xs font-medium hover:bg-violet-500/35 hover:text-white transition-colors whitespace-nowrap">
             <Sparkles size={12} />나만의 별자리 만들기
@@ -1641,5 +1650,65 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         />
       )}
     </div>
+  );
+}
+
+/* ─── 별자리 친구 추가 버튼 ─────────────────────── */
+
+function SaveConstellationButton({ targetId, targetName, targetColor, targetSeed, viewerUid }: {
+  targetId: string;
+  targetName: string;
+  targetColor: string;
+  targetSeed?: number;
+  viewerUid: string;
+}) {
+  const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    getPersonalsByOwner(viewerUid).then((pages) => {
+      const myPage = pages.find((p) => p.universe);
+      const already = myPage?.universe?.savedConstellations?.some((s) => s.id === targetId);
+      if (already) setSaved(true);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetId, viewerUid]);
+
+  const handleSave = async () => {
+    if (saved || loading) return;
+    setLoading(true);
+    try {
+      const pages = await getPersonalsByOwner(viewerUid);
+      const myPage = pages.find((p) => p.universe);
+      if (!myPage) return;
+      const existing = myPage.universe?.savedConstellations ?? [];
+      if (existing.some((s) => s.id === targetId)) { setSaved(true); return; }
+      const updated = [...existing, {
+        id: targetId,
+        name: targetName,
+        color: targetColor,
+        constellationSeed: targetSeed,
+        savedAt: new Date().toISOString(),
+      }];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await updatePersonal(myPage.id, { "universe.savedConstellations": updated } as any);
+      setSaved(true);
+    } catch { /* 실패 무시 */ }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <button
+      onClick={handleSave}
+      disabled={saved || loading}
+      className="flex items-center gap-1.5 px-3.5 py-2 rounded-full backdrop-blur-sm border text-xs font-medium transition-colors whitespace-nowrap"
+      style={saved
+        ? { backgroundColor: `${targetColor}30`, borderColor: `${targetColor}60`, color: targetColor }
+        : { backgroundColor: "rgba(0,0,0,0.4)", borderColor: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.55)" }
+      }
+    >
+      {loading ? <Loader2 size={12} className="animate-spin" /> : <Star size={12} fill={saved ? "currentColor" : "none"} />}
+      {saved ? "저장됨" : "별자리 저장"}
+    </button>
   );
 }

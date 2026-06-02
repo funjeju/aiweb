@@ -9,6 +9,7 @@ import {
 } from "@/lib/universe/stars";
 import type { Constellation } from "@/lib/universe/stars";
 import { useAuthStore } from "@/lib/store/authStore";
+import { getPersonalsByOwner } from "@/lib/firebase/personals";
 import { Sparkles, LogIn, LayoutDashboard, Plus, Minus } from "lucide-react";
 
 /* ─── 타입 ─────────────────────────────────────── */
@@ -39,20 +40,28 @@ const TILE_STARS_PER = 18; // 타일당 별 수
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 2.0;
 
-/* ─── 배경별 타일 (0~1 정규화, 타일링으로 무한 확장) ── */
+/* ─── 배경별: 타일 좌표마다 고유 시드로 생성 ── */
 
-const TILE_BG = (() => {
-  const rng = mulberry32(0xc0ffee42);
+function getTileStars(tileX: number, tileY: number) {
+  const seed = mulberry32((tileX * 73856093) ^ (tileY * 19349663) ^ 0xc0ffee42);
   return Array.from({ length: TILE_STARS_PER }, () => ({
-    tx: rng(),
-    ty: rng(),
-    r: 0.4 + rng() * 1.1,
-    base: 0.2 + rng() * 0.35,
-    amp: 0.1 + rng() * 0.2,
-    phase: rng() * Math.PI * 2,
-    speed: 0.4 + rng() * 0.8,
+    tx: seed(),
+    ty: seed(),
+    r: 0.4 + seed() * 1.1,
+    base: 0.2 + seed() * 0.35,
+    amp: 0.1 + seed() * 0.2,
+    phase: seed() * Math.PI * 2,
+    speed: 0.4 + seed() * 0.8,
   }));
-})();
+}
+
+// 타일 캐시 (렌더 중 매번 생성 방지)
+const tileCache = new Map<string, ReturnType<typeof getTileStars>>();
+function getCachedTile(tx: number, ty: number) {
+  const key = `${tx},${ty}`;
+  if (!tileCache.has(key)) tileCache.set(key, getTileStars(tx, ty));
+  return tileCache.get(key)!;
+}
 
 /* ─── 가상 공간 크기 (별자리 수에 비례 확장) ──────── */
 
@@ -108,6 +117,16 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
   const router = useRouter();
   const { user } = useAuthStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  /* 내 별자리 여부 */
+  const [myConstellationId, setMyConstellationId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user) { setMyConstellationId(null); return; }
+    getPersonalsByOwner(user.uid).then((pages) => {
+      const mine = pages.find((p) => p.universe);
+      setMyConstellationId(mine?.id ?? null);
+    }).catch(() => {});
+  }, [user]);
 
   const { W: VIRTUAL_W, H: VIRTUAL_H } = useMemo(() => getVirtualSize(universes.length), [universes.length]);
 
@@ -235,7 +254,9 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
 
     for (let tx = -1; tx < tilesX; tx++) {
       for (let ty = -1; ty < tilesY; ty++) {
-        for (const s of TILE_BG) {
+        const tileAbsX = Math.floor((camX * zoom - offX) / tileW) + tx + 1;
+        const tileAbsY = Math.floor((camY * zoom - offY) / tileH) + ty + 1;
+        for (const s of getCachedTile(tileAbsX, tileAbsY)) {
           const px = offX + tx * tileW + s.tx * tileW;
           const py = offY + ty * tileH + s.ty * tileH;
           if (px < -4 || px > W + 4 || py < -4 || py > H + 4) continue;
@@ -655,14 +676,25 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
 
       {/* 하단 CTA */}
       <div className="absolute bottom-8 inset-x-0 flex flex-col items-center gap-3 z-20 pointer-events-none">
-        <Link
-          href={user ? "/private/create/universe" : "/signup"}
-          className="pointer-events-auto flex items-center gap-2 px-7 py-3.5 rounded-full font-bold text-white text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-violet-900/40 select-none"
-          style={{ background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)" }}
-        >
-          <Sparkles size={16} />
-          나만의 별자리 만들기
-        </Link>
+        {myConstellationId ? (
+          <Link
+            href={`/p/${myConstellationId}`}
+            className="pointer-events-auto flex items-center gap-2 px-7 py-3.5 rounded-full font-bold text-white text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-violet-900/40 select-none"
+            style={{ background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)" }}
+          >
+            <Sparkles size={16} />
+            나의 별자리로 가기
+          </Link>
+        ) : (
+          <Link
+            href={user ? "/private/create/universe" : "/signup"}
+            className="pointer-events-auto flex items-center gap-2 px-7 py-3.5 rounded-full font-bold text-white text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-violet-900/40 select-none"
+            style={{ background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)" }}
+          >
+            <Sparkles size={16} />
+            나만의 별자리 만들기
+          </Link>
+        )}
         {!user && (
           <p className="text-white/25 text-xs select-none">이미 계정이 있으신가요?{" "}
             <Link href="/login" className="text-violet-400/70 hover:text-violet-400 pointer-events-auto underline underline-offset-2 transition-colors">

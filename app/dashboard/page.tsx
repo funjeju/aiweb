@@ -221,6 +221,34 @@ function DashboardContent() {
                 ))}
               </div>
             )}
+
+            {/* 저장된 별자리 친구 */}
+            {(() => {
+              const savedList = pages.flatMap((p) => p.universe?.savedConstellations ?? []);
+              if (savedList.length === 0) return null;
+              return (
+                <div className="mt-8">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <Star size={12} className="text-violet-400" />저장한 별자리
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {savedList.map((s) => (
+                      <Link key={s.id} href={`/p/${s.id}`}
+                        className="flex items-center gap-3 p-3 rounded-2xl bg-white border border-gray-100 hover:border-violet-200 hover:bg-violet-50 transition-colors">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: `${s.color}22`, boxShadow: `0 0 8px ${s.color}44` }}>
+                          <Star size={14} style={{ color: s.color }} fill={s.color} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">{s.name}</p>
+                          <p className="text-xs text-gray-400">별자리 친구</p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </>
         )}
 
