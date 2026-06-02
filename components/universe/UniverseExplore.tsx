@@ -97,6 +97,60 @@ function computePositions(universes: UniverseItem[]): Map<string, { cx: number; 
   return result;
 }
 
+/* ─── 워프 효과음 (Web Audio API) ───────────────── */
+
+function playWarpSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+    // 1. 저음 엔진 드론
+    const drone = ctx.createOscillator();
+    const droneGain = ctx.createGain();
+    drone.type = "sawtooth";
+    drone.frequency.setValueAtTime(60, ctx.currentTime);
+    drone.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 2.7);
+    droneGain.gain.setValueAtTime(0, ctx.currentTime);
+    droneGain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.3);
+    droneGain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 1.5);
+    droneGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.7);
+    drone.connect(droneGain);
+    droneGain.connect(ctx.destination);
+    drone.start();
+    drone.stop(ctx.currentTime + 2.7);
+
+    // 2. 워프 진입 휘파람 (주파수 상승)
+    const sweep = ctx.createOscillator();
+    const sweepGain = ctx.createGain();
+    sweep.type = "sine";
+    sweep.frequency.setValueAtTime(200, ctx.currentTime);
+    sweep.frequency.exponentialRampToValueAtTime(2000, ctx.currentTime + 0.6);
+    sweep.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 1.5);
+    sweepGain.gain.setValueAtTime(0.08, ctx.currentTime);
+    sweepGain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.6);
+    sweepGain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 2.0);
+    sweepGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.7);
+    sweep.connect(sweepGain);
+    sweepGain.connect(ctx.destination);
+    sweep.start();
+    sweep.stop(ctx.currentTime + 2.7);
+
+    // 3. 도착 핑 (맑은 고음)
+    const ping = ctx.createOscillator();
+    const pingGain = ctx.createGain();
+    ping.type = "sine";
+    ping.frequency.setValueAtTime(880, ctx.currentTime + 2.1);
+    ping.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 2.7);
+    pingGain.gain.setValueAtTime(0, ctx.currentTime + 2.1);
+    pingGain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 2.2);
+    pingGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.7);
+    ping.connect(pingGain);
+    pingGain.connect(ctx.destination);
+    ping.start(ctx.currentTime + 2.1);
+    ping.stop(ctx.currentTime + 2.7);
+
+  } catch { /* 브라우저 지원 안 하면 무시 */ }
+}
+
 /* ─── 방향 이름 ─────────────────────────────────── */
 
 function directionName(angle: number): string {
@@ -150,10 +204,11 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
   const warpRef = useRef<{
     active: boolean;
     phase: "stretching" | "traveling" | "arriving";
-    progress: number; // 0~1
+    progress: number;
     fromX: number; fromY: number;
     toX: number; toY: number;
     startTime: number;
+    targetNodeId?: string;
   } | null>(null);
   const [warping, setWarping] = useState(false);
 
@@ -221,7 +276,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
   }, []);
 
   /* 워프 실행 */
-  const startWarp = useCallback((toX: number, toY: number) => {
+  const startWarp = useCallback((toX: number, toY: number, targetNodeId?: string) => {
     if (warpRef.current?.active) return;
     warpRef.current = {
       active: true,
@@ -231,8 +286,10 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       fromY: camRef.current.y,
       toX, toY,
       startTime: performance.now(),
+      targetNodeId,
     };
     setWarping(true);
+    playWarpSound();
   }, []);
 
   /* RAF 렌더 */
@@ -284,30 +341,29 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     if (warp?.active) {
       const elapsed = (t - warp.startTime) / 1000;
       if (warp.phase === "stretching") {
-        warpStretch = Math.min(1, elapsed / 0.4);
-        if (elapsed > 0.4) {
+        warpStretch = Math.min(1, elapsed / 0.6);
+        if (elapsed > 0.6) {
           warp.phase = "traveling";
           warp.startTime = t;
         }
       } else if (warp.phase === "traveling") {
         warpStretch = 1;
-        const progress = Math.min(1, elapsed / 0.6);
-        // easeInOut
+        const progress = Math.min(1, elapsed / 1.4);
         const ease = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
         camRef.current = {
           x: warp.fromX + (warp.toX - warp.fromX) * ease,
           y: warp.fromY + (warp.toY - warp.fromY) * ease,
         };
         setCamSnap({ ...camRef.current });
-        if (elapsed > 0.6) {
+        if (elapsed > 1.4) {
           warp.phase = "arriving";
           warp.startTime = t;
           camRef.current = { x: warp.toX, y: warp.toY };
           setCamSnap({ x: warp.toX, y: warp.toY });
         }
       } else if (warp.phase === "arriving") {
-        warpStretch = Math.max(0, 1 - elapsed / 0.4);
-        if (elapsed > 0.4) {
+        warpStretch = Math.max(0, 1 - elapsed / 0.7);
+        if (elapsed > 0.7) {
           warpRef.current = null;
           setWarping(false);
         }
@@ -352,13 +408,33 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
 
     /* 별자리 렌더 */
     const cellZoomed = CELL * zoom;
+    // 도착 글로우: arriving 페이즈에서 목적지 별자리 강조
+    const arrivingGlow = warp?.phase === "arriving"
+      ? Math.max(0, 1 - (performance.now() - warp.startTime) / 700)
+      : 0;
+
     for (const node of nodes) {
       const px = sx(node.cx), py = sy(node.cy);
       if (px < -margin || px > W + margin || py < -margin || py > H + margin) continue;
 
       const isHovered = node.item.id === hid;
+      const isArriving = arrivingGlow > 0 && node.item.id === warp?.targetNodeId;
       const pulse = 0.88 + 0.12 * Math.sin(t * 0.0014 + node.cx * 0.0007);
       const baseAlpha = isHovered ? 1 : 0.72;
+
+      // 도착 글로우 — 큰 원형 빛 번짐
+      if (isArriving) {
+        const glowR = cellZoomed * (1.5 + arrivingGlow * 2);
+        const arriGlow = ctx.createRadialGradient(px, py, 0, px, py, glowR);
+        arriGlow.addColorStop(0, `${node.item.color}${Math.round(arrivingGlow * 80).toString(16).padStart(2, "0")}`);
+        arriGlow.addColorStop(0.4, `${node.item.color}${Math.round(arrivingGlow * 40).toString(16).padStart(2, "0")}`);
+        arriGlow.addColorStop(1, "transparent");
+        ctx.fillStyle = arriGlow;
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(px, py, glowR, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       if (isHovered) {
         const ring = ctx.createRadialGradient(px, py, cellZoomed * 0.1, px, py, cellZoomed * 0.85);
@@ -597,6 +673,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       scale: 0.6 + 0.4 * (1 - s.dist / maxDist),
       toX: s.node.cx,
       toY: s.node.cy,
+      nodeId: s.node.item.id,
     }));
   }, [nodes, camSnap, vw, vh, zoomSnap]);
 
@@ -751,7 +828,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
             </div>
             <button
               className="pointer-events-auto flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold text-white border border-white/20 bg-white/10 hover:bg-white/20 active:scale-95 transition-all whitespace-nowrap backdrop-blur-sm"
-              onClick={() => startWarp(hint.toX, hint.toY)}
+              onClick={() => startWarp(hint.toX, hint.toY, hint.nodeId)}
             >
               🚀 워프
             </button>

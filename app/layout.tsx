@@ -5,15 +5,17 @@ import { AuthProvider } from "@/components/AuthProvider";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://aiweb-xi-one.vercel.app"),
   title: {
-    default: "AI 웹빌더 - 소상공인 홈페이지 3분 완성",
-    template: "%s | AI 웹빌더",
+    default: "별자리 우주 — 당신만의 별자리 다이어리",
+    template: "%s | 별자리 우주",
   },
-  description: "네이버 플레이스 URL 하나로 3분 안에 가게 홈페이지를 만드세요. 소상공인을 위한 AI 웹빌더.",
-  keywords: ["소상공인 홈페이지", "가게 홈페이지", "AI 웹빌더", "네이버 플레이스"],
+  description: "온 우주에 유일한 당신만의 별자리에서 당신의 기억을 담아가세요.",
+  keywords: ["별자리", "다이어리", "우주", "나만의 공간", "감성"],
   openGraph: {
     type: "website",
     locale: "ko_KR",
-    siteName: "AI 웹빌더",
+    siteName: "별자리 우주",
+    title: "별자리 우주 — 당신만의 별자리 다이어리",
+    description: "온 우주에 유일한 당신만의 별자리에서 당신의 기억을 담아가세요.",
   },
 };
 
