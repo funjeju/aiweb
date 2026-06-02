@@ -441,7 +441,6 @@ function AdminUniverseConfig() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -458,43 +457,44 @@ function AdminUniverseConfig() {
     });
   }, []);
 
-  const audioCtxRef = useRef<AudioContext | null>(null);
   const previewStopRef = useRef<(() => void) | null>(null);
 
-  const togglePreview = (id: string, url: string | null, genKey?: string) => {
-    // 이미 재생 중이면 정지
-    if (playingId === id) {
-      previewStopRef.current?.();
-      previewAudio?.pause();
-      setPreviewAudio(null);
-      setPlayingId(null);
-      return;
-    }
+  const DURATIONS: Record<string, number> = {
+    builtin: 2800, "sci-fi": 2600, booster: 2600, whoosh: 1300, laser: 2100,
+  };
+
+  const stopPreview = () => {
     previewStopRef.current?.();
-    previewAudio?.pause();
-    setPreviewAudio(null);
+    previewStopRef.current = null;
+    setPlayingId(null);
+  };
+
+  const togglePreview = (id: string, url: string | null, genKey?: string) => {
+    if (playingId === id) { stopPreview(); return; }
+    stopPreview();
 
     // 커스텀 업로드 URL 재생
     if (url) {
       const audio = new Audio(url);
-      audio.onended = () => { setPlayingId(null); setPreviewAudio(null); };
+      audio.onended = () => setPlayingId(null);
       audio.play().catch(() => {});
-      setPreviewAudio(audio);
       setPlayingId(id);
+      previewStopRef.current = () => { audio.pause(); };
       return;
     }
 
     // Web Audio 생성음 재생
-    const gen = genKey ? WARP_SOUND_GENERATORS[genKey] : null;
+    const key = genKey ?? id;
+    const gen = WARP_SOUND_GENERATORS[key];
     if (!gen) return;
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioCtxRef.current = ctx;
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AC() as AudioContext;
       gen(ctx);
       setPlayingId(id);
-      const duration = id === "whoosh" ? 1300 : 2700;
-      const t = setTimeout(() => { setPlayingId(null); }, duration);
-      previewStopRef.current = () => { clearTimeout(t); ctx.close(); setPlayingId(null); };
+      const duration = DURATIONS[key] ?? 2700;
+      const t = window.setTimeout(() => { setPlayingId((prev) => prev === id ? null : prev); ctx.close(); }, duration);
+      previewStopRef.current = () => { clearTimeout(t); ctx.close().catch(() => {}); };
     } catch { setPlayingId(null); }
   };
 

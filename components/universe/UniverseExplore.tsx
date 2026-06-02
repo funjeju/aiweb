@@ -100,56 +100,72 @@ function computePositions(universes: UniverseItem[]): Map<string, { cx: number; 
 
 /* ─── 워프 효과음 (Web Audio API) ───────────────── */
 
-function playWarpSound() {
+function playWarpSound(genKey = "builtin") {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const AC = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new AC() as AudioContext;
+    const t = ctx.currentTime;
 
-    // 1. 저음 엔진 드론
-    const drone = ctx.createOscillator();
-    const droneGain = ctx.createGain();
-    drone.type = "sawtooth";
-    drone.frequency.setValueAtTime(60, ctx.currentTime);
-    drone.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 2.7);
-    droneGain.gain.setValueAtTime(0, ctx.currentTime);
-    droneGain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.3);
-    droneGain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 1.5);
-    droneGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.7);
-    drone.connect(droneGain);
-    droneGain.connect(ctx.destination);
-    drone.start();
-    drone.stop(ctx.currentTime + 2.7);
+    if (genKey === "sci-fi") {
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = "square"; o.frequency.setValueAtTime(100, t);
+      o.frequency.exponentialRampToValueAtTime(3000, t + 1.5);
+      o.frequency.exponentialRampToValueAtTime(500, t + 2.5);
+      g.gain.setValueAtTime(0.05, t); g.gain.linearRampToValueAtTime(0.12, t + 0.8);
+      g.gain.linearRampToValueAtTime(0, t + 2.5);
+      o.connect(g); g.connect(ctx.destination); o.start(); o.stop(t + 2.5);
+      const p = ctx.createOscillator(); const pg = ctx.createGain();
+      p.type = "sine"; p.frequency.setValueAtTime(1200, t + 1.8);
+      pg.gain.setValueAtTime(0, t + 1.8); pg.gain.linearRampToValueAtTime(0.2, t + 2.0);
+      pg.gain.linearRampToValueAtTime(0, t + 2.5);
+      p.connect(pg); pg.connect(ctx.destination); p.start(t + 1.8); p.stop(t + 2.5);
 
-    // 2. 워프 진입 휘파람 (주파수 상승)
-    const sweep = ctx.createOscillator();
-    const sweepGain = ctx.createGain();
-    sweep.type = "sine";
-    sweep.frequency.setValueAtTime(200, ctx.currentTime);
-    sweep.frequency.exponentialRampToValueAtTime(2000, ctx.currentTime + 0.6);
-    sweep.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 1.5);
-    sweepGain.gain.setValueAtTime(0.08, ctx.currentTime);
-    sweepGain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.6);
-    sweepGain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 2.0);
-    sweepGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.7);
-    sweep.connect(sweepGain);
-    sweepGain.connect(ctx.destination);
-    sweep.start();
-    sweep.stop(ctx.currentTime + 2.7);
+    } else if (genKey === "booster") {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 2.5, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 1.5);
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const g = ctx.createGain(); const f = ctx.createBiquadFilter();
+      f.type = "lowpass"; f.frequency.setValueAtTime(400, t); f.frequency.linearRampToValueAtTime(100, t + 2.5);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.6, t + 0.3); g.gain.linearRampToValueAtTime(0, t + 2.5);
+      src.connect(f); f.connect(g); g.connect(ctx.destination); src.start(); src.stop(t + 2.5);
 
-    // 3. 도착 핑 (맑은 고음)
-    const ping = ctx.createOscillator();
-    const pingGain = ctx.createGain();
-    ping.type = "sine";
-    ping.frequency.setValueAtTime(880, ctx.currentTime + 2.1);
-    ping.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 2.7);
-    pingGain.gain.setValueAtTime(0, ctx.currentTime + 2.1);
-    pingGain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 2.2);
-    pingGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.7);
-    ping.connect(pingGain);
-    pingGain.connect(ctx.destination);
-    ping.start(ctx.currentTime + 2.1);
-    ping.stop(ctx.currentTime + 2.7);
+    } else if (genKey === "whoosh") {
+      const buf = ctx.createBuffer(1, ctx.sampleRate * 1.2, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const f = ctx.createBiquadFilter(); const g = ctx.createGain();
+      f.type = "bandpass"; f.frequency.setValueAtTime(2000, t); f.frequency.exponentialRampToValueAtTime(200, t + 1.2); f.Q.value = 0.8;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.5, t + 0.1); g.gain.linearRampToValueAtTime(0, t + 1.2);
+      src.connect(f); f.connect(g); g.connect(ctx.destination); src.start(); src.stop(t + 1.2);
 
-  } catch { /* 브라우저 지원 안 하면 무시 */ }
+    } else if (genKey === "laser") {
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = "sawtooth"; o.frequency.setValueAtTime(4000, t); o.frequency.exponentialRampToValueAtTime(80, t + 2.0);
+      g.gain.setValueAtTime(0.1, t); g.gain.linearRampToValueAtTime(0.15, t + 0.5); g.gain.linearRampToValueAtTime(0, t + 2.0);
+      o.connect(g); g.connect(ctx.destination); o.start(); o.stop(t + 2.0);
+      const o2 = ctx.createOscillator(); const g2 = ctx.createGain();
+      o2.type = "sine"; o2.frequency.setValueAtTime(8000, t); o2.frequency.exponentialRampToValueAtTime(200, t + 2.0);
+      g2.gain.setValueAtTime(0.05, t); g2.gain.linearRampToValueAtTime(0, t + 2.0);
+      o2.connect(g2); g2.connect(ctx.destination); o2.start(); o2.stop(t + 2.0);
+
+    } else {
+      // builtin (기본)
+      const drone = ctx.createOscillator(); const dg = ctx.createGain();
+      drone.type = "sawtooth"; drone.frequency.setValueAtTime(60, t); drone.frequency.exponentialRampToValueAtTime(30, t + 2.7);
+      dg.gain.setValueAtTime(0, t); dg.gain.linearRampToValueAtTime(0.15, t + 0.3); dg.gain.linearRampToValueAtTime(0, t + 2.7);
+      drone.connect(dg); dg.connect(ctx.destination); drone.start(); drone.stop(t + 2.7);
+      const sw = ctx.createOscillator(); const sg = ctx.createGain();
+      sw.type = "sine"; sw.frequency.setValueAtTime(200, t); sw.frequency.exponentialRampToValueAtTime(2000, t + 0.6);
+      sg.gain.setValueAtTime(0.08, t); sg.gain.linearRampToValueAtTime(0, t + 2.7);
+      sw.connect(sg); sg.connect(ctx.destination); sw.start(); sw.stop(t + 2.7);
+      const ping = ctx.createOscillator(); const pg = ctx.createGain();
+      ping.type = "sine"; ping.frequency.setValueAtTime(880, t + 2.1); ping.frequency.exponentialRampToValueAtTime(440, t + 2.7);
+      pg.gain.setValueAtTime(0, t + 2.1); pg.gain.linearRampToValueAtTime(0.2, t + 2.2); pg.gain.linearRampToValueAtTime(0, t + 2.7);
+      ping.connect(pg); pg.connect(ctx.destination); ping.start(t + 2.1); ping.stop(t + 2.7);
+    }
+  } catch { /* 무시 */ }
 }
 
 /* ─── 방향 이름 ─────────────────────────────────── */
@@ -328,11 +344,14 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     setWarping(true);
     const soundUrl = warpSoundUrlRef.current;
     if (soundUrl && !soundUrl.startsWith("builtin:")) {
+      // 커스텀 업로드 파일
       const audio = new Audio(soundUrl);
       audio.volume = 0.7;
-      audio.play().catch(() => playWarpSound());
+      audio.play().catch(() => playWarpSound("builtin"));
     } else {
-      playWarpSound();
+      // builtin:genKey 또는 null → genKey 추출
+      const genKey = soundUrl?.startsWith("builtin:") ? soundUrl.replace("builtin:", "") : "builtin";
+      playWarpSound(genKey);
     }
   }, []);
 
