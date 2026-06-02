@@ -493,15 +493,6 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
   /* 화면 밖 별자리 → 가까운 4개 방향 힌트 */
   const nearestHints = useMemo(() => {
     if (nodes.length === 0 || vw === 0) return [];
-    const zoom = zoomSnap;
-    const margin = CELL + 60;
-    const hasVisible = nodes.some((n) => {
-      const px = (n.cx - camSnap.x) * zoom + vw / 2;
-      const py = (n.cy - camSnap.y) * zoom + vh / 2;
-      return px > -margin && px < vw + margin && py > -margin && py < vh + margin;
-    });
-    if (hasVisible) return [];
-
     const LY_PER_UNIT = 120;
     const HIDE_LY = 3; // 3광년 이하면 가이드 숨김
 
