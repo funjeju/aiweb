@@ -16,6 +16,7 @@ import { getAppUrl } from "@/lib/utils";
 import {
   Plus, Globe, Pencil, ExternalLink, Sparkles, LogOut, User,
   MoreVertical, Trash2, Layers, Star, Building2, RefreshCw, Shield, Lock, Check,
+  Play, Pause,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -366,6 +367,7 @@ function AdminUniverseConfig() {
   const [saved, setSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -378,18 +380,26 @@ function AdminUniverseConfig() {
     });
   }, []);
 
-  const playPreview = (url: string | null) => {
+  const togglePreview = (id: string, url: string | null) => {
+    // 이미 재생 중이면 정지
+    if (playingId === id) {
+      previewAudio?.pause();
+      setPreviewAudio(null);
+      setPlayingId(null);
+      return;
+    }
     previewAudio?.pause();
-    if (!url) return;
+    if (!url) { setPlayingId(null); setPreviewAudio(null); return; }
     const audio = new Audio(url);
+    audio.onended = () => { setPlayingId(null); setPreviewAudio(null); };
     audio.play().catch(() => {});
     setPreviewAudio(audio);
+    setPlayingId(id);
   };
 
   const handleSampleSelect = (sample: typeof WARP_SOUND_SAMPLES[0]) => {
     setSelectedSampleId(sample.id);
     setWarpSoundUrl(sample.url);
-    playPreview(sample.url);
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -404,7 +414,7 @@ function AdminUniverseConfig() {
       const url = await getDownloadURL(snap.ref);
       setWarpSoundUrl(url);
       setSelectedSampleId("custom");
-      playPreview(url);
+      togglePreview("custom", url);
     } catch { alert("업로드 실패"); }
     finally { setUploading(false); e.target.value = ""; }
   };
@@ -444,19 +454,44 @@ function AdminUniverseConfig() {
         <p className="text-sm text-gray-600 mb-2 font-medium">🚀 워프 효과음</p>
         <div className="grid grid-cols-1 gap-1.5 mb-3">
           {WARP_SOUND_SAMPLES.map((sample) => (
-            <button key={sample.id}
-              onClick={() => handleSampleSelect(sample)}
-              className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border text-sm text-left transition-colors",
+            <div key={sample.id}
+              className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-colors",
                 selectedSampleId === sample.id
-                  ? "border-violet-400 bg-violet-50 text-violet-700 font-semibold"
-                  : "border-gray-200 text-gray-600 hover:border-violet-300 hover:bg-violet-50/50"
+                  ? "border-violet-400 bg-violet-50"
+                  : "border-gray-200 hover:border-violet-300"
               )}>
-              <span className="flex-1">{sample.label}</span>
+              {/* 플레이 버튼 */}
+              <button
+                onClick={() => togglePreview(sample.id, sample.url)}
+                disabled={!sample.url}
+                className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors",
+                  sample.url
+                    ? playingId === sample.id
+                      ? "bg-violet-500 text-white"
+                      : "bg-gray-100 text-gray-500 hover:bg-violet-100 hover:text-violet-500"
+                    : "bg-gray-50 text-gray-300 cursor-not-allowed"
+                )}>
+                {playingId === sample.id
+                  ? <Pause size={12} />
+                  : <Play size={12} />}
+              </button>
+              {/* 선택 */}
+              <button onClick={() => handleSampleSelect(sample)}
+                className="flex-1 text-left">
+                <span className={cn("text-sm", selectedSampleId === sample.id ? "text-violet-700 font-semibold" : "text-gray-600")}>
+                  {sample.label}
+                </span>
+              </button>
               {selectedSampleId === sample.id && <Check size={13} className="text-violet-500 shrink-0" />}
-            </button>
+            </div>
           ))}
           {selectedSampleId === "custom" && (
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-violet-400 bg-violet-50 text-sm text-violet-700 font-semibold">
+              <button onClick={() => togglePreview("custom", warpSoundUrl)}
+                className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors",
+                  playingId === "custom" ? "bg-violet-500 text-white" : "bg-violet-100 text-violet-500 hover:bg-violet-200")}>
+                {playingId === "custom" ? <Pause size={12} /> : <Play size={12} />}
+              </button>
               <span className="flex-1">🎵 커스텀 업로드</span>
               <Check size={13} className="text-violet-500 shrink-0" />
             </div>
