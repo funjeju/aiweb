@@ -1,6 +1,7 @@
 import {
   doc, getDoc, setDoc, updateDoc, deleteDoc,
   collection, query, where, getDocs, serverTimestamp, limit,
+  arrayUnion,
 } from "firebase/firestore";
 import { db } from "./client";
 import type { PersonalSchema } from "@/lib/types/personal";
@@ -39,6 +40,46 @@ export async function getPublishedUniverses(maxCount = 30): Promise<PersonalSche
   return snap.docs
     .map((d) => d.data() as PersonalSchema)
     .filter((p) => !!p.universe?.color);
+}
+
+/**
+ * 별자리 생성 시 stars 컬렉션에 별 → 유저 매핑 등록.
+ * stars/{starName} = { users: [{ personalId, name, color }] }
+ */
+export async function registerStarUsers(
+  starNames: string[],
+  personalId: string,
+  name: string,
+  color: string,
+): Promise<void> {
+  const entry = { personalId, name, color };
+  await Promise.all(
+    starNames.map((starName) =>
+      setDoc(
+        doc(db, "stars", starName),
+        { users: arrayUnion(entry) },
+        { merge: true },
+      )
+    )
+  );
+}
+
+/** 특정 별을 가진 유저 목록 조회 (자신 제외, 최대 count명 랜덤) */
+export async function getStarNeighbors(
+  starName: string,
+  excludePersonalId: string,
+  count = 3,
+): Promise<Array<{ personalId: string; name: string; color: string }>> {
+  const snap = await getDoc(doc(db, "stars", starName));
+  if (!snap.exists()) return [];
+  const users: Array<{ personalId: string; name: string; color: string }> =
+    (snap.data().users ?? []).filter((u: { personalId: string }) => u.personalId !== excludePersonalId);
+  // 랜덤 셔플 후 count개 반환
+  for (let i = users.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [users[i], users[j]] = [users[j], users[i]];
+  }
+  return users.slice(0, count);
 }
 
 /** 전체 개인 페이지 조회 (어드민 전용) */

@@ -191,6 +191,7 @@ function LayoutTab({
   onAssetPosChange,
   onAssetPosMobileChange,
   allAssets,
+  profilePhotoUrl,
 }: {
   menus: MenuNode[];
   onMenusChange: (menus: MenuNode[]) => void;
@@ -205,6 +206,7 @@ function LayoutTab({
   onAssetPosChange: (v: Record<string, { top: string; left: string }>) => void;
   onAssetPosMobileChange: (v: Record<string, { top: string; left: string }>) => void;
   allAssets: UniverseAsset[];
+  profilePhotoUrl?: string;
 }) {
   const [viewMode, setViewMode] = useState<ViewMode>("desktop");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -314,9 +316,26 @@ function LayoutTab({
 
         {/* 에셋 */}
         {selectedAssets.map((assetId, i) => {
+          const pos = activeAssetPos[assetId] ?? getAssetDefaultPos(i, selectedAssets.length);
+
+          // 프로필 사진 에셋
+          if (assetId === "profile-photo" && profilePhotoUrl) {
+            return (
+              <div key="a-profile-photo"
+                onPointerDown={(e) => handlePointerDown(e, `asset:profile-photo`)}
+                className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing touch-none z-10"
+                style={{ top: pos.top, left: pos.left }}>
+                <div className="flex flex-col items-center gap-0.5">
+                  <img src={profilePhotoUrl} alt="프로필"
+                    className="w-9 h-9 rounded-full object-cover border-2 border-violet-400/50" />
+                  <span className="text-[9px] text-white/50 whitespace-nowrap">프로필</span>
+                </div>
+              </div>
+            );
+          }
+
           const asset = allAssets.find((a) => a.id === assetId);
           if (!asset) return null;
-          const pos = activeAssetPos[assetId] ?? getAssetDefaultPos(i, selectedAssets.length);
           return (
             <div key={`a-${assetId}`}
               onPointerDown={(e) => handlePointerDown(e, `asset:${assetId}`)}
@@ -355,40 +374,22 @@ function BgmTab({
   personalId,
   bgmList,
   onChange,
+  bgmPlaying,
+  onToggleBgm,
 }: {
   personalId: string;
   bgmList: BgmTrack[];
   onChange: (list: BgmTrack[]) => void;
+  bgmPlaying: boolean;
+  onToggleBgm: () => void;
 }) {
   const [uploading, setUploading] = useState(false);
-  // 설정 패널 내 독립 프리뷰 오디오 (메인 플레이어와 무관)
-  const previewRef = useRef<HTMLAudioElement | null>(null);
-  const [previewIdx, setPreviewIdx] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const MAX = 3;
 
-  // 패널 닫힐 때 프리뷰 정리
-  useEffect(() => {
-    return () => { previewRef.current?.pause(); previewRef.current = null; };
-  }, []);
-
-  const togglePreview = (idx: number) => {
-    // 같은 트랙 누르면 정지
-    if (previewIdx === idx) {
-      previewRef.current?.pause();
-      previewRef.current = null;
-      setPreviewIdx(null);
-      return;
-    }
-    // 다른 트랙: 기존 정지 후 새로 재생
-    previewRef.current?.pause();
-    previewRef.current = null;
-    const audio = new Audio(bgmList[idx].url);
-    audio.loop = false;
-    audio.onended = () => setPreviewIdx(null);
-    previewRef.current = audio;
-    audio.play().catch(() => {});
-    setPreviewIdx(idx);
+  // 재생 버튼: 메인 플레이어 직접 제어 (동기화)
+  const togglePreview = () => {
+    onToggleBgm();
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -408,7 +409,7 @@ function BgmTab({
   };
 
   const remove = (idx: number) => {
-    if (previewIdx === idx) { previewRef.current?.pause(); previewRef.current = null; setPreviewIdx(null); }
+    if (bgmPlaying) onToggleBgm(); // 재생 중이면 정지 후 삭제
     onChange(bgmList.filter((_, i) => i !== idx));
   };
 
@@ -417,7 +418,6 @@ function BgmTab({
 
   const setVolume = (idx: number, vol: number) => {
     onChange(bgmList.map((t, i) => i === idx ? { ...t, volume: vol } : t));
-    if (previewIdx === idx && previewRef.current) previewRef.current.volume = vol;
   };
 
   return (
@@ -433,10 +433,10 @@ function BgmTab({
           {bgmList.map((track, i) => (
             <div key={track.url + i} className="rounded-2xl bg-white/5 border border-white/10 p-3 space-y-2">
               <div className="flex items-center gap-3">
-                {/* 트랙별 독립 프리뷰 버튼 */}
-                <button onClick={() => togglePreview(i)}
+                {/* 메인 플레이어와 동기화된 재생 버튼 */}
+                <button onClick={togglePreview}
                   className="w-9 h-9 rounded-full bg-violet-500/30 border border-violet-400/50 flex items-center justify-center text-white hover:bg-violet-500/50 transition-colors shrink-0">
-                  {previewIdx === i ? <Pause size={14} /> : <Play size={14} />}
+                  {bgmPlaying ? <Pause size={14} /> : <Play size={14} />}
                 </button>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{track.name}</p>
@@ -690,6 +690,8 @@ export function UniverseSettings({
               personalId={personalId}
               bgmList={state.bgmList}
               onChange={(bgmList) => setState((p) => ({ ...p, bgmList }))}
+              bgmPlaying={bgmPlaying}
+              onToggleBgm={onToggleBgm}
             />
           )}
           {tab === "layout" && (
@@ -707,6 +709,7 @@ export function UniverseSettings({
               onAssetPosChange={(v) => setState((p) => ({ ...p, assetPositions: v }))}
               onAssetPosMobileChange={(v) => setState((p) => ({ ...p, assetPositionsMobile: v }))}
               allAssets={allAssets}
+              profilePhotoUrl={profilePhotoUrl}
             />
           )}
           {tab === "color" && (

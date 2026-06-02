@@ -10,7 +10,7 @@ import { UniverseSettings } from "./UniverseSettings";
 import { generateConstellation, generateConstellationFromSeed } from "@/lib/universe/stars";
 import { getStarLore } from "@/lib/universe/star-lore";
 import type { ConstellationStar } from "@/lib/universe/stars";
-import { getPublishedUniverses, updatePersonal, getPersonalById, getPersonalsByOwner } from "@/lib/firebase/personals";
+import { getPublishedUniverses, updatePersonal, getPersonalById, getPersonalsByOwner, getStarNeighbors } from "@/lib/firebase/personals";
 import { getStarComments, addStarComment, deleteStarComment } from "@/lib/firebase/starComments";
 import type { StarComment } from "@/lib/firebase/starComments";
 import { uploadPersonalImage } from "@/lib/firebase/storage";
@@ -1550,6 +1550,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           onClick={handleNeighborClick}>
           <Sparkles size={15} />{ui.neighbor}
         </button>
+        <ShareButton url={data.publicUrl || (data.personalId ? `${typeof window !== "undefined" ? window.location.origin : ""}/p/${data.personalId}` : "")} color={data.color} />
       </div>
 
       {/* 메뉴 패널 */}
@@ -1630,6 +1631,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
                 </button>
               </div>
               <p className="text-white/70 text-sm leading-relaxed">{lore.desc}</p>
+              <StarNeighbors starName={clickedStar.star.name} excludeId={data.personalId} color={data.color} />
               <StarComments starName={clickedStar.star.name} currentUser={user} />
             </div>
           </div>
@@ -1659,6 +1661,86 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/* ─── 퍼가기 버튼 ──────────────────────────────── */
+
+function ShareButton({ url, color }: { url: string; color: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!url) return null;
+
+  const handleShare = async () => {
+    // 모바일: Web Share API 우선
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "내 별자리 우주", url });
+        return;
+      } catch { /* 취소하면 무시 */ }
+    }
+    // 데스크탑: 클립보드 복사
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+
+  return (
+    <button
+      onClick={handleShare}
+      className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold text-white backdrop-blur-sm border transition-colors"
+      style={{ backgroundColor: copied ? `${color}33` : `${color}22`, borderColor: `${color}66` }}
+    >
+      {copied ? <Check size={15} /> : <Send size={15} />}
+      {copied ? "복사됨" : "퍼가기"}
+    </button>
+  );
+}
+
+/* ─── 이 별을 가진 이웃 유저 ───────────────────── */
+
+function StarNeighbors({ starName, excludeId, color }: {
+  starName: string;
+  excludeId?: string;
+  color: string;
+}) {
+  const [neighbors, setNeighbors] = useState<Array<{ personalId: string; name: string; color: string }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    getStarNeighbors(starName, excludeId ?? "", 3)
+      .then(setNeighbors)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [starName, excludeId]);
+
+  if (loading) return (
+    <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2">
+      <Loader2 size={12} className="animate-spin text-white/30" />
+      <span className="text-white/30 text-xs">이 별의 이웃 찾는 중...</span>
+    </div>
+  );
+
+  if (neighbors.length === 0) return null;
+
+  return (
+    <div className="mt-4 pt-4 border-t border-white/10">
+      <p className="text-white/30 text-[10px] uppercase tracking-wider mb-3">이 별을 가진 우주</p>
+      <div className="flex flex-col gap-2">
+        {neighbors.map((n) => (
+          <a key={n.personalId} href={`/p/${n.personalId}`}
+            className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
+            <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+              style={{ backgroundColor: `${n.color}30`, boxShadow: `0 0 8px ${n.color}44` }}>
+              <span className="text-white text-xs">✦</span>
+            </div>
+            <span className="text-white/70 text-sm font-medium">{n.name}</span>
+            <ArrowRight size={12} className="ml-auto text-white/30" />
+          </a>
+        ))}
+      </div>
     </div>
   );
 }

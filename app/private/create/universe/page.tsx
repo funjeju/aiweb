@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store/authStore";
-import { createPersonal } from "@/lib/firebase/personals";
+import { createPersonal, registerStarUsers } from "@/lib/firebase/personals";
 import { PERSONA_TYPES } from "@/lib/types/personal";
 import type { PersonalSchema } from "@/lib/types/personal";
 import { generatePersonalId } from "@/lib/utils";
@@ -145,6 +145,14 @@ export default function UniverseCreatePage() {
         },
       };
       await createPersonal(data);
+
+      // 별 → 유저 매핑 등록 (백그라운드, 실패해도 생성은 완료)
+      if (starPool) {
+        const constellation = generateConstellation(name, color, Number(favoriteNumber) || 7, starPool);
+        const starNames = constellation.stars.map((s) => s.star.name);
+        registerStarUsers(starNames, id, name, color).catch(console.error);
+      }
+
       router.push(`/p/${id}`);
     } catch (err) {
       console.error(err);

@@ -570,7 +570,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       </div>
 
       {/* 줌 버튼 */}
-      <div className="absolute right-5 bottom-32 z-20 flex flex-col gap-2 pointer-events-auto">
+      <div className="absolute right-5 z-20 flex flex-col gap-2 pointer-events-auto" style={{ bottom: "max(8rem, env(safe-area-inset-bottom, 0px) + 7rem)" }}>
         <button
           onClick={() => applyZoom(1.25, (canvasRef.current?.clientWidth ?? window.innerWidth) / 2, (canvasRef.current?.clientHeight ?? window.innerHeight) / 2)}
           className="w-9 h-9 rounded-xl bg-black/40 border border-white/15 backdrop-blur-sm flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors">
@@ -674,7 +674,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       ))}
 
       {/* 하단 CTA */}
-      <div className="absolute bottom-8 inset-x-0 flex flex-col items-center gap-3 z-20 pointer-events-none">
+      <div className="absolute bottom-0 inset-x-0 flex flex-col items-center gap-3 z-20 pointer-events-none pb-8" style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 0px) + 1.5rem)" }}>
         {myConstellationId ? (
           <Link
             href={`/p/${myConstellationId}`}
