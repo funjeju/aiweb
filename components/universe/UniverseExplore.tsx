@@ -10,6 +10,7 @@ import {
 import type { Constellation } from "@/lib/universe/stars";
 import { useAuthStore } from "@/lib/store/authStore";
 import { getPersonalsByOwner } from "@/lib/firebase/personals";
+import { getUniverseConfig } from "@/lib/firebase/config";
 import { Sparkles, LogIn, LayoutDashboard, Plus, Minus } from "lucide-react";
 
 /* ─── 타입 ─────────────────────────────────────── */
@@ -200,6 +201,36 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
   /* 핀치 줌 */
   const lastPinchDist = useRef<number | null>(null);
 
+  /* 별똥별 */
+  interface ShootingStar {
+    x: number; y: number;
+    vx: number; vy: number;
+    life: number; maxLife: number;
+  }
+  const shootingStarsRef = useRef<ShootingStar[]>([]);
+  const shootingStarTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const spawn = () => {
+      const W = window.innerWidth, H = window.innerHeight;
+      const dir = Math.floor(Math.random() * 4);
+      const speed = 0.006 + Math.random() * 0.004;
+      const maxLife = 150 + Math.floor(Math.random() * 60);
+      let x: number, y: number, vx: number, vy: number;
+      if (dir === 0) { x = -0.08; y = 0.05 + Math.random() * 0.5; const a = 0.08 + Math.random() * 0.2; vx = Math.cos(a) * speed; vy = Math.sin(a) * speed; }
+      else if (dir === 1) { x = 1.08; y = 0.05 + Math.random() * 0.5; const a = 0.08 + Math.random() * 0.2; vx = -Math.cos(a) * speed; vy = Math.sin(a) * speed; }
+      else if (dir === 2) { x = Math.random() * 0.6; y = -0.08; const a = Math.PI / 2 - 0.3 + Math.random() * 0.3; vx = Math.cos(a) * speed; vy = Math.sin(a) * speed; }
+      else { x = 0.4 + Math.random() * 0.6; y = -0.08; const a = Math.PI / 2 - 0.3 + Math.random() * 0.3; vx = -Math.cos(a) * speed; vy = Math.sin(a) * speed; }
+      shootingStarsRef.current.push({ x, y, vx, vy, life: 0, maxLife });
+      void W; void H;
+    };
+    // 첫 발사 3초 후
+    const first = setTimeout(spawn, 3000);
+    // 이후 10초마다
+    shootingStarTimerRef.current = setInterval(spawn, 10000);
+    return () => { clearTimeout(first); if (shootingStarTimerRef.current) clearInterval(shootingStarTimerRef.current); };
+  }, []);
+
   /* 워프 */
   const warpRef = useRef<{
     active: boolean;
@@ -275,6 +306,12 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     setCamSnap({ ...camRef.current });
   }, []);
 
+  /* 워프 효과음 URL (config에서 로드) */
+  const warpSoundUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    getUniverseConfig().then((c) => { warpSoundUrlRef.current = c.warpSoundUrl ?? null; }).catch(() => {});
+  }, []);
+
   /* 워프 실행 */
   const startWarp = useCallback((toX: number, toY: number, targetNodeId?: string) => {
     if (warpRef.current?.active) return;
@@ -289,7 +326,13 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       targetNodeId,
     };
     setWarping(true);
-    playWarpSound();
+    if (warpSoundUrlRef.current) {
+      const audio = new Audio(warpSoundUrlRef.current);
+      audio.volume = 0.7;
+      audio.play().catch(() => playWarpSound());
+    } else {
+      playWarpSound();
+    }
   }, []);
 
   /* RAF 렌더 */
@@ -403,6 +446,28 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
           }
         }
       }
+    }
+    ctx.globalAlpha = 1;
+
+    /* 별똥별 */
+    shootingStarsRef.current = shootingStarsRef.current.filter((ss) => ss.life < ss.maxLife);
+    for (const ss of shootingStarsRef.current) {
+      const progress = ss.life / ss.maxLife;
+      const alpha = progress < 0.15 ? progress / 0.15 : progress > 0.7 ? 1 - (progress - 0.7) / 0.3 : 1;
+      const px = ss.x * W, py = ss.y * H;
+      const tailX = px - ss.vx * W * 18, tailY = py - ss.vy * H * 18;
+      const lg = ctx.createLinearGradient(tailX, tailY, px, py);
+      lg.addColorStop(0, "rgba(255,255,255,0)");
+      lg.addColorStop(0.6, `rgba(255,255,255,${alpha * 0.4})`);
+      lg.addColorStop(1, `rgba(255,255,255,${alpha})`);
+      ctx.strokeStyle = lg; ctx.lineWidth = 1.5; ctx.globalAlpha = alpha;
+      ctx.beginPath(); ctx.moveTo(tailX, tailY); ctx.lineTo(px, py); ctx.stroke();
+      const glow = ctx.createRadialGradient(px, py, 0, px, py, 6);
+      glow.addColorStop(0, `rgba(255,255,255,${alpha})`);
+      glow.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = glow; ctx.globalAlpha = alpha * 0.8;
+      ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill();
+      ss.x += ss.vx; ss.y += ss.vy; ss.life++;
     }
     ctx.globalAlpha = 1;
 

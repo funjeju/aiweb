@@ -5,10 +5,13 @@ import { db } from "./client";
 export interface UniverseGlobalConfig {
   /** 별똥별 발사 주기 (초) */
   shootingStarIntervalSec: number;
+  /** 워프 효과음 URL (null이면 Web Audio 기본음) */
+  warpSoundUrl?: string | null;
 }
 
 export const DEFAULT_UNIVERSE_CONFIG: UniverseGlobalConfig = {
   shootingStarIntervalSec: 10,
+  warpSoundUrl: null,
 };
 
 const CONFIG_COL = "config";

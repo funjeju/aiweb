@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSitesByOwner, deleteSite } from "@/lib/firebase/sites";
@@ -349,20 +349,73 @@ function SiteCard({ site, onDelete }: { site: SiteSchema; onDelete: () => void }
 }
 
 /* ── 어드민: 전역 우주 설정 (별똥별 주기 등) ── */
+const WARP_SOUND_SAMPLES = [
+  { id: "builtin", label: "🔊 기본 (Web Audio)", url: null },
+  { id: "sci-fi-1", label: "🚀 SF 워프", url: "https://cdn.freesound.org/previews/414/414209_5121236-lq.mp3" },
+  { id: "space-1", label: "🌌 우주 부스터", url: "https://cdn.freesound.org/previews/523/523175_5121236-lq.mp3" },
+  { id: "whoosh-1", label: "💨 휙 통과", url: "https://cdn.freesound.org/previews/425/425557_5121236-lq.mp3" },
+  { id: "laser-1", label: "⚡ 레이저 드라이브", url: "https://cdn.freesound.org/previews/476/476178_5121236-lq.mp3" },
+];
+
 function AdminUniverseConfig() {
   const [interval, setIntervalSec] = useState<number>(10);
+  const [warpSoundUrl, setWarpSoundUrl] = useState<string | null>(null);
+  const [selectedSampleId, setSelectedSampleId] = useState("builtin");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    getUniverseConfig().then((c) => { setIntervalSec(c.shootingStarIntervalSec); setLoading(false); });
+    getUniverseConfig().then((c) => {
+      setIntervalSec(c.shootingStarIntervalSec);
+      setWarpSoundUrl(c.warpSoundUrl ?? null);
+      const matched = WARP_SOUND_SAMPLES.find((s) => s.url === c.warpSoundUrl);
+      setSelectedSampleId(matched ? matched.id : c.warpSoundUrl ? "custom" : "builtin");
+      setLoading(false);
+    });
   }, []);
+
+  const playPreview = (url: string | null) => {
+    previewAudio?.pause();
+    if (!url) return;
+    const audio = new Audio(url);
+    audio.play().catch(() => {});
+    setPreviewAudio(audio);
+  };
+
+  const handleSampleSelect = (sample: typeof WARP_SOUND_SAMPLES[0]) => {
+    setSelectedSampleId(sample.id);
+    setWarpSoundUrl(sample.url);
+    playPreview(sample.url);
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
+      const { storage } = await import("@/lib/firebase/client");
+      const storageRef = ref(storage, `config/warp-sound/${Date.now()}.${file.name.split(".").pop()}`);
+      const snap = await uploadBytes(storageRef, file, { contentType: file.type });
+      const url = await getDownloadURL(snap.ref);
+      setWarpSoundUrl(url);
+      setSelectedSampleId("custom");
+      playPreview(url);
+    } catch { alert("업로드 실패"); }
+    finally { setUploading(false); e.target.value = ""; }
+  };
 
   const save = async () => {
     setSaving(true); setSaved(false);
     try {
-      await setUniverseConfig({ shootingStarIntervalSec: Math.max(2, Math.min(600, interval)) });
+      await setUniverseConfig({
+        shootingStarIntervalSec: Math.max(2, Math.min(600, interval)),
+        warpSoundUrl,
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch { alert("저장에 실패했습니다."); }
@@ -370,11 +423,13 @@ function AdminUniverseConfig() {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-4">
-      <div className="flex items-center gap-2 mb-3">
+    <div className="bg-white rounded-2xl border border-gray-200 p-4 space-y-4">
+      <div className="flex items-center gap-2">
         <Sparkles size={15} className="text-violet-500" />
         <p className="font-semibold text-gray-800 text-sm">전역 우주 설정</p>
       </div>
+
+      {/* 별똥별 주기 */}
       <div className="flex items-center gap-3">
         <label className="text-sm text-gray-600 shrink-0">별똥별 주기</label>
         <input type="number" min={2} max={600} value={loading ? "" : interval}
@@ -382,14 +437,48 @@ function AdminUniverseConfig() {
           disabled={loading}
           className="w-20 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-800 focus:border-violet-400 focus:outline-none" />
         <span className="text-sm text-gray-400">초마다</span>
-        <button onClick={save} disabled={saving || loading}
-          className={cn("ml-auto flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors",
-            saved ? "bg-green-500 text-white" : "bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50")}>
-          {saving ? <RefreshCw size={14} className="animate-spin" /> : saved ? <Check size={14} /> : null}
-          {saved ? "저장됨" : "저장"}
+      </div>
+
+      {/* 워프 효과음 */}
+      <div>
+        <p className="text-sm text-gray-600 mb-2 font-medium">🚀 워프 효과음</p>
+        <div className="grid grid-cols-1 gap-1.5 mb-3">
+          {WARP_SOUND_SAMPLES.map((sample) => (
+            <button key={sample.id}
+              onClick={() => handleSampleSelect(sample)}
+              className={cn("flex items-center gap-2 px-3 py-2 rounded-xl border text-sm text-left transition-colors",
+                selectedSampleId === sample.id
+                  ? "border-violet-400 bg-violet-50 text-violet-700 font-semibold"
+                  : "border-gray-200 text-gray-600 hover:border-violet-300 hover:bg-violet-50/50"
+              )}>
+              <span className="flex-1">{sample.label}</span>
+              {selectedSampleId === sample.id && <Check size={13} className="text-violet-500 shrink-0" />}
+            </button>
+          ))}
+          {selectedSampleId === "custom" && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-violet-400 bg-violet-50 text-sm text-violet-700 font-semibold">
+              <span className="flex-1">🎵 커스텀 업로드</span>
+              <Check size={13} className="text-violet-500 shrink-0" />
+            </div>
+          )}
+        </div>
+
+        {/* 커스텀 업로드 */}
+        <input ref={fileRef} type="file" accept="audio/*" className="hidden" onChange={handleUpload} />
+        <button onClick={() => fileRef.current?.click()} disabled={uploading}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-gray-300 text-sm text-gray-500 hover:border-violet-400 hover:text-violet-500 transition-colors w-full justify-center">
+          {uploading ? <RefreshCw size={14} className="animate-spin" /> : <Plus size={14} />}
+          {uploading ? "업로드 중..." : "직접 업로드 (MP3/WAV)"}
         </button>
       </div>
-      <p className="text-[11px] text-gray-400 mt-2">모든 별자리 우주에 적용됩니다 (2~600초). 방문자가 페이지를 다시 열면 반영돼요.</p>
+
+      <button onClick={save} disabled={saving || loading}
+        className={cn("w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors",
+          saved ? "bg-green-500 text-white" : "bg-violet-500 text-white hover:bg-violet-600 disabled:opacity-50")}>
+        {saving ? <RefreshCw size={14} className="animate-spin" /> : saved ? <Check size={14} /> : null}
+        {saved ? "저장됨" : "저장"}
+      </button>
+      <p className="text-[11px] text-gray-400">모든 별자리 우주에 적용됩니다. 방문자가 페이지를 다시 열면 반영돼요.</p>
     </div>
   );
 }
