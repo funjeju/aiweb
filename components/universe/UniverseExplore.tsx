@@ -9,7 +9,7 @@ import {
 } from "@/lib/universe/stars";
 import type { Constellation } from "@/lib/universe/stars";
 import { useAuthStore } from "@/lib/store/authStore";
-import { Sparkles, LogIn, LayoutDashboard, ArrowRight } from "lucide-react";
+import { Sparkles, LogIn, LayoutDashboard, Plus, Minus } from "lucide-react";
 
 /* ─── 타입 ─────────────────────────────────────── */
 
@@ -26,24 +26,26 @@ export interface UniverseItem {
 interface UniverseNode {
   item: UniverseItem;
   constellation: Constellation;
-  cx: number; // virtual-space center
+  cx: number;
   cy: number;
 }
 
 /* ─── 상수 ─────────────────────────────────────── */
 
-const VIRTUAL_W = 4800;
-const VIRTUAL_H = 3200;
-const CELL = 200;     // 별자리 표시 영역 지름
+const CELL = 200;
 const LABEL_OFFSET = CELL * 0.52 + 18;
+const TILE_SIZE = 600; // 배경별 타일 크기
+const TILE_STARS_PER = 18; // 타일당 별 수
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 2.0;
 
-/* ─── 배경별 (고정 시드, 800개) ─────────────────── */
+/* ─── 배경별 타일 (0~1 정규화, 타일링으로 무한 확장) ── */
 
-const BG_STARS = (() => {
+const TILE_BG = (() => {
   const rng = mulberry32(0xc0ffee42);
-  return Array.from({ length: 800 }, () => ({
-    vx: rng() * VIRTUAL_W,
-    vy: rng() * VIRTUAL_H,
+  return Array.from({ length: TILE_STARS_PER }, () => ({
+    tx: rng(),
+    ty: rng(),
     r: 0.4 + rng() * 1.1,
     base: 0.2 + rng() * 0.35,
     amp: 0.1 + rng() * 0.2,
@@ -52,19 +54,28 @@ const BG_STARS = (() => {
   }));
 })();
 
-/* ─── 유니버스 위치 계산 (그리드 + 지터) ─────────── */
+/* ─── 가상 공간 크기 (별자리 수에 비례 확장) ──────── */
+
+function getVirtualSize(n: number) {
+  const side = Math.max(4, Math.ceil(Math.sqrt(n * 1.4)));
+  return {
+    W: Math.max(4800, side * 600),
+    H: Math.max(3200, side * 400),
+  };
+}
+
+/* ─── 유니버스 위치 계산 ─────────────────────────── */
 
 function computePositions(universes: UniverseItem[]): Map<string, { cx: number; cy: number }> {
   const n = universes.length;
+  const { W, H } = getVirtualSize(n);
   const cols = Math.ceil(Math.sqrt(n * 1.4));
   const rows = Math.ceil(n / cols);
-  const cellW = VIRTUAL_W / cols;
-  const cellH = VIRTUAL_H / rows;
+  const cellW = W / cols;
+  const cellH = H / rows;
 
-  // hash 순서로 정렬 → 배열 순서와 무관하게 위치 고정
   const sorted = [...universes].sort((a, b) => (hashString(a.id) >>> 0) - (hashString(b.id) >>> 0));
   const result = new Map<string, { cx: number; cy: number }>();
-
   sorted.forEach((u, idx) => {
     const col = idx % cols;
     const row = Math.floor(idx / cols);
@@ -98,27 +109,36 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
   const { user } = useAuthStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  /* 카메라 (virtual-space 중심점) */
+  const { W: VIRTUAL_W, H: VIRTUAL_H } = useMemo(() => getVirtualSize(universes.length), [universes.length]);
+
+  /* 카메라 */
   const camRef = useRef({ x: VIRTUAL_W / 2, y: VIRTUAL_H / 2 });
   const [camSnap, setCamSnap] = useState({ x: VIRTUAL_W / 2, y: VIRTUAL_H / 2 });
+
+  /* 줌 */
+  const zoomRef = useRef(1);
+  const [zoomSnap, setZoomSnap] = useState(1);
 
   /* 드래그 */
   const dragging = useRef(false);
   const moved = useRef(false);
   const dragOrigin = useRef({ mx: 0, my: 0, cx: 0, cy: 0 });
 
+  /* 핀치 줌 */
+  const lastPinchDist = useRef<number | null>(null);
+
   /* 호버 */
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const hoveredRef = useRef<string | null>(null);
 
-  /* 첫 방문 드래그 힌트 */
+  /* 힌트 */
   const [showHint, setShowHint] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setShowHint(false), 4000);
     return () => clearTimeout(t);
   }, []);
 
-  /* 뷰포트 크기 */
+  /* 뷰포트 */
   const [vw, setVw] = useState(0);
   const [vh, setVh] = useState(0);
   useEffect(() => {
@@ -128,7 +148,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  /* 노드 계산 */
+  /* 노드 */
   const nodes = useMemo<UniverseNode[]>(() => {
     const posMap = computePositions(universes);
     return universes.map((item) => {
@@ -140,14 +160,35 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     });
   }, [universes]);
 
-  /* 초기 카메라: 전체 별자리 무게중심 */
+  /* 초기 카메라: 신규 방문자는 랜덤 스팟 */
   useEffect(() => {
     if (nodes.length === 0) return;
-    const cx = nodes.reduce((s, n) => s + n.cx, 0) / nodes.length;
-    const cy = nodes.reduce((s, n) => s + n.cy, 0) / nodes.length;
-    camRef.current = { x: cx, y: cy };
-    setCamSnap({ x: cx, y: cy });
-  }, [nodes]);
+    const rng = mulberry32(Date.now() & 0xffffffff);
+    const randX = VIRTUAL_W * (0.1 + rng() * 0.8);
+    const randY = VIRTUAL_H * (0.1 + rng() * 0.8);
+    camRef.current = { x: randX, y: randY };
+    setCamSnap({ x: randX, y: randY });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes.length > 0]);
+
+  /* 줌 헬퍼 */
+  const applyZoom = useCallback((delta: number, pivotX: number, pivotY: number) => {
+    const oldZoom = zoomRef.current;
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, oldZoom * delta));
+    // 피벗 기준으로 카메라 보정
+    const scale = newZoom / oldZoom;
+    const W = canvasRef.current?.clientWidth ?? window.innerWidth;
+    const H = canvasRef.current?.clientHeight ?? window.innerHeight;
+    const vx = camRef.current.x + (pivotX - W / 2) / oldZoom;
+    const vy = camRef.current.y + (pivotY - H / 2) / oldZoom;
+    camRef.current = {
+      x: vx - (pivotX - W / 2) / newZoom,
+      y: vy - (pivotY - H / 2) / newZoom,
+    };
+    zoomRef.current = newZoom;
+    setZoomSnap(newZoom);
+    setCamSnap({ ...camRef.current });
+  }, []);
 
   /* RAF 렌더 */
   const animRef = useRef(0);
@@ -160,7 +201,6 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     const W = canvas.clientWidth;
     const H = canvas.clientHeight;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-
     if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
       canvas.width = Math.round(W * dpr);
       canvas.height = Math.round(H * dpr);
@@ -168,14 +208,16 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     }
 
     const { x: camX, y: camY } = camRef.current;
+    const zoom = zoomRef.current;
     const hid = hoveredRef.current;
     const t = performance.now();
 
-    const sx = (vx: number) => vx - camX + W / 2;
-    const sy = (vy: number) => vy - camY + H / 2;
-    const margin = CELL + 60;
+    // virtual → screen (줌 적용)
+    const sx = (vx: number) => (vx - camX) * zoom + W / 2;
+    const sy = (vy: number) => (vy - camY) * zoom + H / 2;
+    const margin = (CELL + 60) * zoom;
 
-    /* 배경 그라디언트 */
+    /* 배경 */
     const bg = ctx.createRadialGradient(W / 2, H * 0.4, 0, W / 2, H / 2, Math.max(W, H) * 0.85);
     bg.addColorStop(0, "#0d1330");
     bg.addColorStop(0.55, "#080b1d");
@@ -183,20 +225,33 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    /* 배경별 */
-    for (const s of BG_STARS) {
-      const px = sx(s.vx), py = sy(s.vy);
-      if (px < -4 || px > W + 4 || py < -4 || py > H + 4) continue;
-      const alpha = s.base + s.amp * Math.sin(t * 0.001 * s.speed + s.phase);
-      ctx.globalAlpha = Math.max(0, alpha);
-      ctx.fillStyle = "#e8ecff";
-      ctx.beginPath();
-      ctx.arc(px, py, s.r, 0, Math.PI * 2);
-      ctx.fill();
+    /* 배경별 타일링 */
+    const tileW = TILE_SIZE * zoom;
+    const tileH = TILE_SIZE * zoom;
+    const offX = ((-camX * zoom) % tileW + tileW) % tileW;
+    const offY = ((-camY * zoom) % tileH + tileH) % tileH;
+    const tilesX = Math.ceil(W / tileW) + 2;
+    const tilesY = Math.ceil(H / tileH) + 2;
+
+    for (let tx = -1; tx < tilesX; tx++) {
+      for (let ty = -1; ty < tilesY; ty++) {
+        for (const s of TILE_BG) {
+          const px = offX + tx * tileW + s.tx * tileW;
+          const py = offY + ty * tileH + s.ty * tileH;
+          if (px < -4 || px > W + 4 || py < -4 || py > H + 4) continue;
+          const alpha = s.base + s.amp * Math.sin(t * 0.001 * s.speed + s.phase);
+          ctx.globalAlpha = Math.max(0, alpha);
+          ctx.fillStyle = "#e8ecff";
+          ctx.beginPath();
+          ctx.arc(px, py, s.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
     ctx.globalAlpha = 1;
 
     /* 별자리 렌더 */
+    const cellZoomed = CELL * zoom;
     for (const node of nodes) {
       const px = sx(node.cx), py = sy(node.cy);
       if (px < -margin || px > W + margin || py < -margin || py > H + margin) continue;
@@ -205,70 +260,59 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       const pulse = 0.88 + 0.12 * Math.sin(t * 0.0014 + node.cx * 0.0007);
       const baseAlpha = isHovered ? 1 : 0.72;
 
-      /* 호버 글로우 링 */
       if (isHovered) {
-        const ring = ctx.createRadialGradient(px, py, CELL * 0.1, px, py, CELL * 0.85);
+        const ring = ctx.createRadialGradient(px, py, cellZoomed * 0.1, px, py, cellZoomed * 0.85);
         ring.addColorStop(0, `${node.item.color}30`);
         ring.addColorStop(0.6, `${node.item.color}18`);
         ring.addColorStop(1, "transparent");
         ctx.fillStyle = ring;
         ctx.globalAlpha = 0.9;
         ctx.beginPath();
-        ctx.arc(px, py, CELL * 0.85, 0, Math.PI * 2);
+        ctx.arc(px, py, cellZoomed * 0.85, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
       }
 
       const c = node.constellation;
 
-      /* 연결선 */
       ctx.globalAlpha = baseAlpha * 0.38 * pulse;
       ctx.strokeStyle = node.item.color;
       ctx.lineWidth = isHovered ? 1.3 : 1;
       for (const [a, b] of c.links) {
-        const ax = px + (c.stars[a].x - 0.5) * CELL;
-        const ay = py + (c.stars[a].y - 0.5) * CELL;
-        const bx = px + (c.stars[b].x - 0.5) * CELL;
-        const by = py + (c.stars[b].y - 0.5) * CELL;
-        ctx.beginPath();
-        ctx.moveTo(ax, ay);
-        ctx.lineTo(bx, by);
-        ctx.stroke();
+        const ax = px + (c.stars[a].x - 0.5) * cellZoomed;
+        const ay = py + (c.stars[a].y - 0.5) * cellZoomed;
+        const bx = px + (c.stars[b].x - 0.5) * cellZoomed;
+        const by = py + (c.stars[b].y - 0.5) * cellZoomed;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
       }
 
-      /* 별 */
       for (const s of c.stars) {
-        const spx = px + (s.x - 0.5) * CELL;
-        const spy = py + (s.y - 0.5) * CELL;
-        const r = s.size * 1.4;
+        const spx = px + (s.x - 0.5) * cellZoomed;
+        const spy = py + (s.y - 0.5) * cellZoomed;
+        const r = s.size * 1.4 * Math.max(0.5, zoom);
 
-        /* 별빛 글로우 */
         const g = ctx.createRadialGradient(spx, spy, 0, spx, spy, r * 5);
         g.addColorStop(0, node.item.color);
         g.addColorStop(0.4, `${node.item.color}66`);
         g.addColorStop(1, "transparent");
         ctx.fillStyle = g;
         ctx.globalAlpha = baseAlpha * 0.38 * pulse;
-        ctx.beginPath();
-        ctx.arc(spx, spy, r * 5, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(spx, spy, r * 5, 0, Math.PI * 2); ctx.fill();
 
-        /* 별 코어 */
         ctx.globalAlpha = baseAlpha * pulse;
         ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.arc(spx, spy, r * 0.85, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(spx, spy, r * 0.85, 0, Math.PI * 2); ctx.fill();
       }
 
-      /* 이름 레이블 */
       ctx.globalAlpha = isHovered ? 0.95 : 0.55;
       ctx.fillStyle = isHovered ? node.item.color : "#c8cfe8";
-      ctx.font = isHovered ? "bold 13px ui-sans-serif, system-ui, sans-serif" : "12px ui-sans-serif, system-ui, sans-serif";
+      ctx.font = isHovered
+        ? `bold ${Math.round(13 * Math.max(0.7, zoom))}px ui-sans-serif, system-ui, sans-serif`
+        : `${Math.round(12 * Math.max(0.7, zoom))}px ui-sans-serif, system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.shadowColor = "rgba(0,0,0,0.95)";
       ctx.shadowBlur = 8;
-      ctx.fillText(node.item.name, px, py + LABEL_OFFSET);
+      ctx.fillText(node.item.name, px, py + LABEL_OFFSET * zoom);
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
     }
@@ -292,23 +336,19 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       const my = clientY - rect.top;
       const W = canvas.clientWidth, H = canvas.clientHeight;
       const { x, y } = camRef.current;
+      const zoom = zoomRef.current;
       let best: string | null = null;
-      let bestDist = CELL * 0.62;
+      let bestDist = CELL * 0.62 * zoom;
       for (const node of nodes) {
-        const spx = node.cx - x + W / 2;
-        const spy = node.cy - y + H / 2;
+        const spx = (node.cx - x) * zoom + W / 2;
+        const spy = (node.cy - y) * zoom + H / 2;
         const d = Math.sqrt((mx - spx) ** 2 + (my - spy) ** 2);
         if (d < bestDist) { bestDist = d; best = node.item.id; }
       }
       return best;
     };
 
-    const clampCam = (x: number, y: number) => ({
-      x: Math.max(0, Math.min(VIRTUAL_W, x)),
-      y: Math.max(0, Math.min(VIRTUAL_H, y)),
-    });
-
-    /* 마우스 */
+    /* 마우스 드래그 */
     const onDown = (e: MouseEvent) => {
       if (e.button !== 0) return;
       dragging.current = true;
@@ -322,9 +362,11 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
         const dx = e.clientX - dragOrigin.current.mx;
         const dy = e.clientY - dragOrigin.current.my;
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved.current = true;
-        const clamped = clampCam(dragOrigin.current.cx - dx, dragOrigin.current.cy - dy);
-        camRef.current = clamped;
-        setCamSnap(clamped);
+        camRef.current = {
+          x: dragOrigin.current.cx - dx / zoomRef.current,
+          y: dragOrigin.current.cy - dy / zoomRef.current,
+        };
+        setCamSnap({ ...camRef.current });
       } else {
         const id = hitTest(e.clientX, e.clientY);
         hoveredRef.current = id;
@@ -341,26 +383,58 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       if (!moved.current && id) router.push(`/p/${id}`);
     };
 
-    /* 터치 */
+    /* 마우스 휠 줌 */
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const pivotX = e.clientX - rect.left;
+      const pivotY = e.clientY - rect.top;
+      const factor = e.deltaY < 0 ? 1.1 : 0.9;
+      applyZoom(factor, pivotX, pivotY);
+    };
+
+    /* 터치 드래그 + 핀치 줌 */
     const onTouchStart = (e: TouchEvent) => {
-      const t = e.touches[0];
-      dragging.current = true;
-      moved.current = false;
-      dragOrigin.current = { mx: t.clientX, my: t.clientY, cx: camRef.current.x, cy: camRef.current.y };
+      if (e.touches.length === 1) {
+        const t = e.touches[0];
+        dragging.current = true;
+        moved.current = false;
+        dragOrigin.current = { mx: t.clientX, my: t.clientY, cx: camRef.current.x, cy: camRef.current.y };
+      } else if (e.touches.length === 2) {
+        dragging.current = false;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        lastPinchDist.current = Math.sqrt(dx * dx + dy * dy);
+      }
     };
 
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault();
-      const t = e.touches[0];
-      const dx = t.clientX - dragOrigin.current.mx;
-      const dy = t.clientY - dragOrigin.current.my;
-      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) moved.current = true;
-      const clamped = clampCam(dragOrigin.current.cx - dx, dragOrigin.current.cy - dy);
-      camRef.current = clamped;
-      setCamSnap(clamped);
+      if (e.touches.length === 1 && dragging.current) {
+        const t = e.touches[0];
+        const dx = t.clientX - dragOrigin.current.mx;
+        const dy = t.clientY - dragOrigin.current.my;
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) moved.current = true;
+        camRef.current = {
+          x: dragOrigin.current.cx - dx / zoomRef.current,
+          y: dragOrigin.current.cy - dy / zoomRef.current,
+        };
+        setCamSnap({ ...camRef.current });
+      } else if (e.touches.length === 2 && lastPinchDist.current !== null) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const factor = dist / lastPinchDist.current;
+        const pivotX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const pivotY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const rect = canvas.getBoundingClientRect();
+        applyZoom(factor, pivotX - rect.left, pivotY - rect.top);
+        lastPinchDist.current = dist;
+      }
     };
 
     const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) lastPinchDist.current = null;
       dragging.current = false;
       if (!moved.current && e.changedTouches.length > 0) {
         const t = e.changedTouches[0];
@@ -372,6 +446,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     canvas.addEventListener("mousedown", onDown);
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+    canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("touchstart", onTouchStart, { passive: false });
     canvas.addEventListener("touchmove", onTouchMove, { passive: false });
     canvas.addEventListener("touchend", onTouchEnd);
@@ -381,52 +456,62 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       canvas.removeEventListener("mousedown", onDown);
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("touchstart", onTouchStart);
       canvas.removeEventListener("touchmove", onTouchMove);
       canvas.removeEventListener("touchend", onTouchEnd);
     };
-  }, [nodes, router]);
+  }, [nodes, router, applyZoom]);
 
-  /* 호버된 노드 */
+  /* 호버 노드 */
   const hoveredNode = useMemo(
     () => nodes.find((n) => n.item.id === hoveredId) ?? null,
     [nodes, hoveredId]
   );
 
-  /* 현재 뷰포트에 보이는 별자리 여부 + 가장 가까운 별자리 방향 */
-  const nearestHint = useMemo(() => {
-    if (nodes.length === 0 || vw === 0) return null;
+  /* 화면 밖 별자리 → 가까운 4개 방향 힌트 */
+  const nearestHints = useMemo(() => {
+    if (nodes.length === 0 || vw === 0) return [];
+    const zoom = zoomSnap;
     const margin = CELL + 60;
     const hasVisible = nodes.some((n) => {
-      const sx = n.cx - camSnap.x + vw / 2;
-      const sy = n.cy - camSnap.y + vh / 2;
-      return sx > -margin && sx < vw + margin && sy > -margin && sy < vh + margin;
+      const px = (n.cx - camSnap.x) * zoom + vw / 2;
+      const py = (n.cy - camSnap.y) * zoom + vh / 2;
+      return px > -margin && px < vw + margin && py > -margin && py < vh + margin;
     });
-    if (hasVisible) return null;
+    if (hasVisible) return [];
 
-    // 가장 가까운 별자리 찾기
-    let nearest = nodes[0];
-    let minDist = Infinity;
-    for (const n of nodes) {
-      const d = Math.hypot(n.cx - camSnap.x, n.cy - camSnap.y);
-      if (d < minDist) { minDist = d; nearest = n; }
-    }
-    const angle = Math.atan2(nearest.cy - camSnap.y, nearest.cx - camSnap.x);
-    const lightyears = Math.max(1, Math.round(minDist / 12));
-    return { angle, lightyears, name: nearest.item.name };
-  }, [nodes, camSnap, vw, vh]);
+    const sorted = [...nodes]
+      .map((n) => ({
+        node: n,
+        dist: Math.hypot(n.cx - camSnap.x, n.cy - camSnap.y),
+        angle: Math.atan2(n.cy - camSnap.y, n.cx - camSnap.x),
+      }))
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 4);
 
-  /* 호버 툴팁 화면 위치 */
+    const maxDist = sorted[sorted.length - 1]?.dist ?? 1;
+    return sorted.map((s) => ({
+      angle: s.angle,
+      lightyears: Math.min(10, Math.max(1, Math.round(s.dist / 120))),
+      name: s.node.item.name,
+      opacity: 0.3 + 0.7 * (1 - s.dist / maxDist),
+      scale: 0.6 + 0.4 * (1 - s.dist / maxDist),
+    }));
+  }, [nodes, camSnap, vw, vh, zoomSnap]);
+
+  /* 호버 툴팁 위치 */
   const tooltipPos = useMemo(() => {
     if (!hoveredNode || typeof window === "undefined") return null;
     const W = window.innerWidth, H = window.innerHeight;
-    const rawX = hoveredNode.cx - camSnap.x + W / 2;
-    const rawY = hoveredNode.cy - camSnap.y + H / 2;
+    const zoom = zoomSnap;
+    const rawX = (hoveredNode.cx - camSnap.x) * zoom + W / 2;
+    const rawY = (hoveredNode.cy - camSnap.y) * zoom + H / 2;
     return {
       x: Math.max(120, Math.min(W - 120, rawX)),
-      y: rawY + LABEL_OFFSET + 10,
+      y: rawY + LABEL_OFFSET * zoom + 10,
     };
-  }, [hoveredNode, camSnap]);
+  }, [hoveredNode, camSnap, zoomSnap]);
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#04050d]">
@@ -463,6 +548,21 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
         </span>
       </div>
 
+      {/* 줌 버튼 */}
+      <div className="absolute right-5 bottom-32 z-20 flex flex-col gap-2 pointer-events-auto">
+        <button
+          onClick={() => applyZoom(1.25, (canvasRef.current?.clientWidth ?? window.innerWidth) / 2, (canvasRef.current?.clientHeight ?? window.innerHeight) / 2)}
+          className="w-9 h-9 rounded-xl bg-black/40 border border-white/15 backdrop-blur-sm flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors">
+          <Plus size={16} />
+        </button>
+        <button
+          onClick={() => applyZoom(0.8, (canvasRef.current?.clientWidth ?? window.innerWidth) / 2, (canvasRef.current?.clientHeight ?? window.innerHeight) / 2)}
+          className="w-9 h-9 rounded-xl bg-black/40 border border-white/15 backdrop-blur-sm flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors">
+          <Minus size={16} />
+        </button>
+        <div className="text-center text-white/20 text-[10px] select-none">{Math.round(zoomSnap * 100)}%</div>
+      </div>
+
       {/* 호버 툴팁 */}
       {hoveredNode && tooltipPos && (
         <div
@@ -492,17 +592,17 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
         </div>
       )}
 
-      {/* 드래그 안내 힌트 (첫 4초) */}
+      {/* 드래그 힌트 (첫 4초) */}
       <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 transition-opacity duration-1000"
-        style={{ opacity: showHint && universes.length > 0 && !nearestHint ? 1 : 0 }}
+        style={{ opacity: showHint && universes.length > 0 && nearestHints.length === 0 ? 1 : 0 }}
       >
         <p className="text-white/20 text-sm tracking-widest uppercase select-none text-center">
           드래그해서 우주를 탐험하세요
         </p>
       </div>
 
-      {/* 완전 빈 우주 (등록된 별자리 없음) */}
+      {/* 빈 우주 */}
       {universes.length === 0 && (
         <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
           <div className="flex flex-col items-center gap-4 text-center px-6">
@@ -517,29 +617,41 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
         </div>
       )}
 
-      {/* 현재 화면에 별자리 없음 → 방향 힌트 */}
-      {nearestHint && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-          <div className="flex flex-col items-center gap-3">
-            {/* 방향 화살표 */}
+      {/* 방향 힌트 (가까운 4개) */}
+      {nearestHints.map((hint, i) => (
+        <div
+          key={i}
+          className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"
+        >
+          <div
+            className="flex flex-col items-center gap-2"
+            style={{
+              opacity: hint.opacity,
+              transform: `scale(${hint.scale})`,
+              // 각 힌트를 중앙에서 방향별로 오프셋
+              position: "absolute",
+              left: `calc(50% + ${Math.cos(hint.angle) * 80}px)`,
+              top: `calc(50% + ${Math.sin(hint.angle) * 80}px)`,
+              translate: "-50% -50%",
+            }}
+          >
             <div
-              className="w-10 h-10 flex items-center justify-center animate-pulse"
-              style={{ transform: `rotate(${nearestHint.angle}rad)` }}
+              className="flex items-center justify-center animate-pulse"
+              style={{ transform: `rotate(${hint.angle}rad)` }}
             >
-              <ArrowRight size={28} className="text-white/25" />
+              <svg width={Math.round(20 + hint.scale * 12)} height={Math.round(20 + hint.scale * 12)} viewBox="0 0 24 24" fill="none">
+                <path d="M5 12h14M13 6l6 6-6 6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </div>
-            <div className="text-center space-y-1">
-              <p className="text-white/30 text-sm">
-                <span className="text-white/50 font-medium">{directionName(nearestHint.angle)}</span>으로 약{" "}
-                <span className="text-white/50 font-medium">{nearestHint.lightyears}광년</span>만 더 드래그하면
+            <div className="text-center space-y-0.5">
+              <p className="text-white/60 text-[11px] font-medium whitespace-nowrap">
+                {directionName(hint.angle)} {hint.lightyears}광년
               </p>
-              <p className="text-white/20 text-xs">
-                누군가의 별자리가 나타납니다
-              </p>
+              <p className="text-white/30 text-[10px] whitespace-nowrap">{hint.name}</p>
             </div>
           </div>
         </div>
-      )}
+      ))}
 
       {/* 하단 CTA */}
       <div className="absolute bottom-8 inset-x-0 flex flex-col items-center gap-3 z-20 pointer-events-none">
