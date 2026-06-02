@@ -326,8 +326,9 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       targetNodeId,
     };
     setWarping(true);
-    if (warpSoundUrlRef.current) {
-      const audio = new Audio(warpSoundUrlRef.current);
+    const soundUrl = warpSoundUrlRef.current;
+    if (soundUrl && !soundUrl.startsWith("builtin:")) {
+      const audio = new Audio(soundUrl);
       audio.volume = 0.7;
       audio.play().catch(() => playWarpSound());
     } else {

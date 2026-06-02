@@ -5,7 +5,7 @@ import { db } from "./client";
 export interface UniverseGlobalConfig {
   /** 별똥별 발사 주기 (초) */
   shootingStarIntervalSec: number;
-  /** 워프 효과음 URL (null이면 Web Audio 기본음) */
+  /** 워프 효과음 URL (null 또는 "builtin:xxx"이면 Web Audio 생성음) */
   warpSoundUrl?: string | null;
 }
 

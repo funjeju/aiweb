@@ -350,12 +350,87 @@ function SiteCard({ site, onDelete }: { site: SiteSchema; onDelete: () => void }
 }
 
 /* ── 어드민: 전역 우주 설정 (별똥별 주기 등) ── */
+type SoundGenerator = (ctx: AudioContext) => void;
+
+const WARP_SOUND_GENERATORS: Record<string, SoundGenerator> = {
+  "builtin": (ctx) => {
+    const drone = ctx.createOscillator(); const g = ctx.createGain();
+    drone.type = "sawtooth"; drone.frequency.setValueAtTime(60, ctx.currentTime);
+    drone.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 2.7);
+    g.gain.setValueAtTime(0, ctx.currentTime); g.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.3);
+    g.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.7);
+    drone.connect(g); g.connect(ctx.destination); drone.start(); drone.stop(ctx.currentTime + 2.7);
+    const sw = ctx.createOscillator(); const sg = ctx.createGain();
+    sw.type = "sine"; sw.frequency.setValueAtTime(200, ctx.currentTime);
+    sw.frequency.exponentialRampToValueAtTime(2000, ctx.currentTime + 0.6);
+    sg.gain.setValueAtTime(0.08, ctx.currentTime); sg.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.7);
+    sw.connect(sg); sg.connect(ctx.destination); sw.start(); sw.stop(ctx.currentTime + 2.7);
+  },
+  "sci-fi": (ctx) => {
+    // 고음 상승 + 떨림
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.type = "square"; o.frequency.setValueAtTime(100, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(3000, ctx.currentTime + 1.5);
+    o.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + 2.5);
+    g.gain.setValueAtTime(0.05, ctx.currentTime); g.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.8);
+    g.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.5);
+    o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 2.5);
+    // 고음 핑
+    const p = ctx.createOscillator(); const pg = ctx.createGain();
+    p.type = "sine"; p.frequency.setValueAtTime(1200, ctx.currentTime + 1.8);
+    pg.gain.setValueAtTime(0, ctx.currentTime + 1.8); pg.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 2.0);
+    pg.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.5);
+    p.connect(pg); pg.connect(ctx.destination); p.start(ctx.currentTime + 1.8); p.stop(ctx.currentTime + 2.5);
+  },
+  "booster": (ctx) => {
+    // 엔진 굉음
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 2.5, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 1.5);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const g = ctx.createGain(); const f = ctx.createBiquadFilter();
+    f.type = "lowpass"; f.frequency.setValueAtTime(400, ctx.currentTime);
+    f.frequency.linearRampToValueAtTime(100, ctx.currentTime + 2.5);
+    g.gain.setValueAtTime(0, ctx.currentTime); g.gain.linearRampToValueAtTime(0.6, ctx.currentTime + 0.3);
+    g.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.5);
+    src.connect(f); f.connect(g); g.connect(ctx.destination); src.start(); src.stop(ctx.currentTime + 2.5);
+  },
+  "whoosh": (ctx) => {
+    // 빠른 통과음
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 1.2, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const f = ctx.createBiquadFilter(); const g = ctx.createGain();
+    f.type = "bandpass"; f.frequency.setValueAtTime(2000, ctx.currentTime);
+    f.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 1.2);
+    f.Q.setValueAtTime(0.8, ctx.currentTime);
+    g.gain.setValueAtTime(0, ctx.currentTime); g.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.1);
+    g.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.2);
+    src.connect(f); f.connect(g); g.connect(ctx.destination); src.start(); src.stop(ctx.currentTime + 1.2);
+  },
+  "laser": (ctx) => {
+    // 레이저 드라이브 (고주파 하강)
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.type = "sawtooth"; o.frequency.setValueAtTime(4000, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 2.0);
+    g.gain.setValueAtTime(0.1, ctx.currentTime); g.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.5);
+    g.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.0);
+    o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime + 2.0);
+    const o2 = ctx.createOscillator(); const g2 = ctx.createGain();
+    o2.type = "sine"; o2.frequency.setValueAtTime(8000, ctx.currentTime);
+    o2.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 2.0);
+    g2.gain.setValueAtTime(0.05, ctx.currentTime); g2.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.0);
+    o2.connect(g2); g2.connect(ctx.destination); o2.start(); o2.stop(ctx.currentTime + 2.0);
+  },
+};
+
 const WARP_SOUND_SAMPLES = [
-  { id: "builtin", label: "🔊 기본 (Web Audio)", url: null },
-  { id: "sci-fi-1", label: "🚀 SF 워프", url: "https://cdn.freesound.org/previews/414/414209_5121236-lq.mp3" },
-  { id: "space-1", label: "🌌 우주 부스터", url: "https://cdn.freesound.org/previews/523/523175_5121236-lq.mp3" },
-  { id: "whoosh-1", label: "💨 휙 통과", url: "https://cdn.freesound.org/previews/425/425557_5121236-lq.mp3" },
-  { id: "laser-1", label: "⚡ 레이저 드라이브", url: "https://cdn.freesound.org/previews/476/476178_5121236-lq.mp3" },
+  { id: "builtin", label: "🔊 기본 (드론+휘파람)", url: null, genKey: "builtin" },
+  { id: "sci-fi",  label: "🚀 SF 워프",           url: null, genKey: "sci-fi"  },
+  { id: "booster", label: "🌌 우주 부스터",         url: null, genKey: "booster" },
+  { id: "whoosh",  label: "💨 휙 통과",             url: null, genKey: "whoosh"  },
+  { id: "laser",   label: "⚡ 레이저 드라이브",      url: null, genKey: "laser"   },
 ];
 
 function AdminUniverseConfig() {
@@ -374,32 +449,58 @@ function AdminUniverseConfig() {
     getUniverseConfig().then((c) => {
       setIntervalSec(c.shootingStarIntervalSec);
       setWarpSoundUrl(c.warpSoundUrl ?? null);
-      const matched = WARP_SOUND_SAMPLES.find((s) => s.url === c.warpSoundUrl);
-      setSelectedSampleId(matched ? matched.id : c.warpSoundUrl ? "custom" : "builtin");
+      const savedUrl = c.warpSoundUrl ?? null;
+      const matched = WARP_SOUND_SAMPLES.find((s) =>
+        s.url === savedUrl || `builtin:${s.genKey}` === savedUrl
+      );
+      setSelectedSampleId(matched ? matched.id : savedUrl && !savedUrl.startsWith("builtin:") ? "custom" : "builtin");
       setLoading(false);
     });
   }, []);
 
-  const togglePreview = (id: string, url: string | null) => {
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const previewStopRef = useRef<(() => void) | null>(null);
+
+  const togglePreview = (id: string, url: string | null, genKey?: string) => {
     // 이미 재생 중이면 정지
     if (playingId === id) {
+      previewStopRef.current?.();
       previewAudio?.pause();
       setPreviewAudio(null);
       setPlayingId(null);
       return;
     }
+    previewStopRef.current?.();
     previewAudio?.pause();
-    if (!url) { setPlayingId(null); setPreviewAudio(null); return; }
-    const audio = new Audio(url);
-    audio.onended = () => { setPlayingId(null); setPreviewAudio(null); };
-    audio.play().catch(() => {});
-    setPreviewAudio(audio);
-    setPlayingId(id);
+    setPreviewAudio(null);
+
+    // 커스텀 업로드 URL 재생
+    if (url) {
+      const audio = new Audio(url);
+      audio.onended = () => { setPlayingId(null); setPreviewAudio(null); };
+      audio.play().catch(() => {});
+      setPreviewAudio(audio);
+      setPlayingId(id);
+      return;
+    }
+
+    // Web Audio 생성음 재생
+    const gen = genKey ? WARP_SOUND_GENERATORS[genKey] : null;
+    if (!gen) return;
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioCtxRef.current = ctx;
+      gen(ctx);
+      setPlayingId(id);
+      const duration = id === "whoosh" ? 1300 : 2700;
+      const t = setTimeout(() => { setPlayingId(null); }, duration);
+      previewStopRef.current = () => { clearTimeout(t); ctx.close(); setPlayingId(null); };
+    } catch { setPlayingId(null); }
   };
 
   const handleSampleSelect = (sample: typeof WARP_SOUND_SAMPLES[0]) => {
     setSelectedSampleId(sample.id);
-    setWarpSoundUrl(sample.url);
+    setWarpSoundUrl(sample.url ?? `builtin:${sample.genKey}`);
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -462,7 +563,7 @@ function AdminUniverseConfig() {
               )}>
               {/* 플레이 버튼 */}
               <button
-                onClick={() => togglePreview(sample.id, sample.url)}
+                onClick={() => togglePreview(sample.id, sample.url, sample.genKey)}
                 disabled={!sample.url}
                 className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors",
                   sample.url
