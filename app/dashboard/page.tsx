@@ -564,13 +564,11 @@ function AdminUniverseConfig() {
               {/* 플레이 버튼 */}
               <button
                 onClick={() => togglePreview(sample.id, sample.url, sample.genKey)}
-                disabled={!sample.url}
+                disabled={!sample.url && !sample.genKey}
                 className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors",
-                  sample.url
-                    ? playingId === sample.id
-                      ? "bg-violet-500 text-white"
-                      : "bg-gray-100 text-gray-500 hover:bg-violet-100 hover:text-violet-500"
-                    : "bg-gray-50 text-gray-300 cursor-not-allowed"
+                  playingId === sample.id
+                    ? "bg-violet-500 text-white"
+                    : "bg-gray-100 text-gray-500 hover:bg-violet-100 hover:text-violet-500"
                 )}>
                 {playingId === sample.id
                   ? <Pause size={12} />
