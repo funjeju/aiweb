@@ -15,9 +15,18 @@ import { cn } from "@/lib/utils";
 import { ArrowLeft, Sparkles, Loader2, Check, X, Link as LinkIcon } from "lucide-react";
 import { ConstellationPreview } from "@/components/universe/ConstellationPreview";
 import { generateConstellation } from "@/lib/universe/stars";
+import type { RealStar } from "@/lib/universe/stars";
 
 const COLOR_PRESETS = ["#a78bfa", "#60a5fa", "#f472b6", "#34d399", "#fbbf24", "#f87171", "#22d3ee", "#c084fc"];
 const PUBLIC_DOMAIN = process.env.NEXT_PUBLIC_SLUG_DOMAIN ?? "study.funjeju.com";
+
+const SEASONS = [
+  { id: "spring", label: "봄", emoji: "🌸" },
+  { id: "summer", label: "여름", emoji: "☀️" },
+  { id: "autumn", label: "가을", emoji: "🍂" },
+  { id: "winter", label: "겨울", emoji: "❄️" },
+] as const;
+type Season = (typeof SEASONS)[number]["id"];
 
 type SlugState = "idle" | "checking" | "ok" | "taken" | "error";
 
@@ -28,6 +37,9 @@ export default function UniverseCreatePage() {
   const [name, setName] = useState("");
   const [color, setColor] = useState("#a78bfa");
   const [favoriteNumber, setFavoriteNumber] = useState("7");
+  const [season, setSeason] = useState<Season>("summer");
+  const [starPool, setStarPool] = useState<RealStar[] | undefined>(undefined);
+  const [starPoolLoading, setStarPoolLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
@@ -41,6 +53,37 @@ export default function UniverseCreatePage() {
   useEffect(() => {
     if (!authLoading && !user) router.replace("/login?from=/private/create/universe");
   }, [user, authLoading, router]);
+
+  const fetchStarPool = async (s: Season) => {
+    setStarPoolLoading(true);
+    try {
+      const res = await fetch("/api/universe/stars", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ season: s }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStarPool(data.stars);
+      }
+    } catch {
+      // 실패 시 기존 하드코딩 풀 사용 (starPool = undefined)
+    } finally {
+      setStarPoolLoading(false);
+    }
+  };
+
+  const handleSeasonChange = (s: Season) => {
+    setSeason(s);
+    setStarPool(undefined);
+    fetchStarPool(s);
+  };
+
+  // 최초 마운트 시 기본 계절로 별 풀 로드
+  useEffect(() => {
+    if (user) fetchStarPool(season);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const derivedSlug = slugInput || normalizeSlug(name) || "";
 
@@ -94,7 +137,9 @@ export default function UniverseCreatePage() {
         universe: {
           color,
           favoriteNumber: Number(favoriteNumber) || 7,
-          constellationSeed: generateConstellation(name, color, Number(favoriteNumber) || 7).seed,
+          constellationSeed: generateConstellation(name, color, Number(favoriteNumber) || 7, starPool).seed,
+          constellationSeason: season,
+          constellationStarPool: starPool,
           menus: [
             { id: "profile", label: "내 소개", icon: "profile" },
             { id: "diary",   label: "다이어리", icon: "diary" },
@@ -141,8 +186,13 @@ export default function UniverseCreatePage() {
         <h1 className="text-2xl font-bold mb-1">나만의 별자리 만들기</h1>
         <p className="text-white/50 text-sm mb-6">이름·색·숫자로 세상에 하나뿐인 우주가 만들어져요</p>
 
-        <div className="rounded-2xl overflow-hidden border border-white/10 mb-6 aspect-[4/3]">
-          <ConstellationPreview name={name} color={color} favoriteNumber={Number(favoriteNumber) || 7} />
+        <div className="rounded-2xl overflow-hidden border border-white/10 mb-6 aspect-[4/3] relative">
+          <ConstellationPreview name={name} color={color} favoriteNumber={Number(favoriteNumber) || 7} starPool={starPool} />
+          {starPoolLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+              <Loader2 className="w-5 h-5 animate-spin text-white/60" />
+            </div>
+          )}
         </div>
 
         <div className="space-y-5">
@@ -162,6 +212,22 @@ export default function UniverseCreatePage() {
               ))}
               <input type="color" value={color} onChange={(e) => setColor(e.target.value)}
                 className="w-8 h-8 rounded-full border border-white/20 cursor-pointer bg-transparent" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold mb-2">좋아하는 계절</label>
+            <div className="grid grid-cols-4 gap-2">
+              {SEASONS.map((s) => (
+                <button key={s.id} onClick={() => handleSeasonChange(s.id)}
+                  className={cn("flex flex-col items-center gap-1 py-3 rounded-xl border transition-all text-sm font-medium",
+                    season === s.id
+                      ? "border-violet-400 bg-violet-400/15 text-white"
+                      : "border-white/10 bg-white/5 text-white/50 hover:text-white/80")}>
+                  <span className="text-lg">{s.emoji}</span>
+                  <span>{s.label}</span>
+                </button>
+              ))}
             </div>
           </div>
 

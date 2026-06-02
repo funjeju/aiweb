@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { generateConstellation } from "@/lib/universe/stars";
 
 /** 마법사용 별자리 미리보기 (입력값 바뀌면 즉시 갱신, 정적 렌더). */
-export function ConstellationPreview({ name, color, favoriteNumber }: { name: string; color: string; favoriteNumber: number }) {
+export function ConstellationPreview({ name, color, favoriteNumber, starPool }: { name: string; color: string; favoriteNumber: number; starPool?: import("@/lib/universe/stars").RealStar[] }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export function ConstellationPreview({ name, color, favoriteNumber }: { name: st
     g.addColorStop(0, "#0b1026"); g.addColorStop(1, "#05060f");
     ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
 
-    const c = generateConstellation(name || "나의 우주", color, favoriteNumber);
+    const c = generateConstellation(name || "나의 우주", color, favoriteNumber, starPool);
 
     // 연결선
     ctx.strokeStyle = color; ctx.globalAlpha = 0.4; ctx.lineWidth = 1;
@@ -49,7 +49,7 @@ export function ConstellationPreview({ name, color, favoriteNumber }: { name: st
       ctx.fillText(s.star.name, px, py - r * 2 - 3);
       ctx.globalAlpha = 1;
     }
-  }, [name, color, favoriteNumber]);
+  }, [name, color, favoriteNumber, starPool]);
 
   return <canvas ref={ref} className="w-full h-full" />;
 }
