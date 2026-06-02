@@ -502,19 +502,26 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     });
     if (hasVisible) return [];
 
-    const sorted = [...nodes]
+    const LY_PER_UNIT = 120;
+    const HIDE_LY = 3; // 3광년 이하면 가이드 숨김
+
+    const candidates = [...nodes]
       .map((n) => ({
         node: n,
         dist: Math.hypot(n.cx - camSnap.x, n.cy - camSnap.y),
         angle: Math.atan2(n.cy - camSnap.y, n.cx - camSnap.x),
       }))
+      .map((s) => ({ ...s, lightyears: s.dist / LY_PER_UNIT }))
+      .filter((s) => s.lightyears > HIDE_LY) // 3광년 초과일 때만 가이드
       .sort((a, b) => a.dist - b.dist)
       .slice(0, 4);
 
-    const maxDist = sorted[sorted.length - 1]?.dist ?? 1;
-    return sorted.map((s) => ({
+    if (candidates.length === 0) return [];
+
+    const maxDist = candidates[candidates.length - 1]?.dist ?? 1;
+    return candidates.map((s) => ({
       angle: s.angle,
-      lightyears: Math.min(3, Math.max(1, Math.round(s.dist / 120))),
+      lightyears: Math.round(s.lightyears),
       name: s.node.item.name,
       opacity: 0.3 + 0.7 * (1 - s.dist / maxDist),
       scale: 0.6 + 0.4 * (1 - s.dist / maxDist),
