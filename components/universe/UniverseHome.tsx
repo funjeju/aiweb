@@ -1496,11 +1496,11 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         )}
       </div>
 
-      {/* 별자리 이름 — 모바일: 상단, 데스크탑: 중앙 */}
+      {/* 별자리 이름 — 모바일: 하단 버튼 위, 데스크탑: 중앙 */}
       <div className={cn(
         "absolute left-1/2 -translate-x-1/2 text-center pointer-events-none z-10",
         isMobile
-          ? "top-16 px-4 w-full"
+          ? "bottom-32 px-4 w-full"
           : "top-1/2 -translate-y-1/2"
       )}>
         <p className={cn("uppercase tracking-[0.25em] mb-1", isMobile ? "text-[10px]" : "text-xs")}
@@ -1581,10 +1581,10 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
             }}
           />
         )}
-        <button className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold text-white backdrop-blur-sm border"
+        <button className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold text-white backdrop-blur-sm border transition-colors hover:bg-white/10"
           style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}66` }}
           onClick={handleNeighborClick}>
-          <Sparkles size={15} />{ui.neighbor}
+          <Sparkles size={14} />{ui.neighbor}
         </button>
         <ShareButton url={data.publicUrl || (data.personalId ? `${typeof window !== "undefined" ? window.location.origin : ""}/p/${data.personalId}` : "")} color={data.color} />
       </div>
