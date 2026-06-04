@@ -879,21 +879,36 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
         </div>
       )}
 
-      {/* 방향 힌트 (가까운 4개) */}
-      {nearestHints.map((hint, i) => (
+      {/* 방향 힌트 (가까운 4개) — 화면 가장자리 배치 */}
+      {nearestHints.map((hint, i) => {
+        // 방향 벡터가 화면 가장자리와 만나는 지점 계산 (padding 80px)
+        const pad = 100;
+        const hw = (vw / 2) - pad;
+        const hh = (vh / 2) - pad;
+        const cos = Math.cos(hint.angle);
+        const sin = Math.sin(hint.angle);
+        // x, y 방향 중 먼저 가장자리에 닿는 쪽 기준
+        const tx = cos === 0 ? Infinity : hw / Math.abs(cos);
+        const ty = sin === 0 ? Infinity : hh / Math.abs(sin);
+        const t = Math.min(tx, ty);
+        const ex = vw / 2 + cos * t;
+        const ey = vh / 2 + sin * t;
+
+        return (
         <div
           key={i}
-          className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"
+          className="absolute z-10 pointer-events-none"
+          style={{
+            left: ex,
+            top: ey,
+            transform: "translate(-50%, -50%)",
+          }}
         >
           <div
             className="flex flex-col items-center gap-3"
             style={{
               opacity: warping ? 0 : hint.opacity,
               transform: `scale(${hint.scale})`,
-              position: "absolute",
-              left: `calc(50% + ${Math.cos(hint.angle) * 110}px)`,
-              top: `calc(50% + ${Math.sin(hint.angle) * 110}px)`,
-              translate: "-50% -50%",
               transition: "opacity 0.3s",
             }}
           >
@@ -919,7 +934,8 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
             </button>
           </div>
         </div>
-      ))}
+        );
+      })}
 
       {/* 하단 CTA */}
       <div className="absolute bottom-0 inset-x-0 flex flex-col items-center gap-3 z-20 pointer-events-none" style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 20px) + 2rem)" }}>
