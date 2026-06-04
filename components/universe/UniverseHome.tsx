@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { StarfieldCanvas } from "./StarfieldCanvas";
 import { ConstellationPreview } from "./ConstellationPreview";
 import { FloatingAssets } from "./FloatingAssets";
