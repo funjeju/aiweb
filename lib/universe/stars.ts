@@ -118,30 +118,45 @@ function projectStars(chosen: RealStar[]): ConstellationStar[] {
 
 /**
  * 시드 기반 랜덤 트리로 별자리 선 연결.
- * - 각 별이 이미 연결된 별들 중 하나에서 뻗어나오는 트리 구조
- * - 분기가 자연스럽게 생겨 국자/Y자/별 모양 등 다양한 형태 생성
+ * - 첫 연결은 가장 가까운 별로
+ * - 이후 연결은 직전 링크 방향 기준 각도 제한으로 수평/일자 방지
+ * - 분기 생성으로 국자/Y자/별 모양 등 다양한 형태 생성
  */
 function buildLinks(stars: ConstellationStar[], rng: () => number): Array<[number, number]> {
   const links: Array<[number, number]> = [];
-  const connected = [0]; // 이미 트리에 포함된 인덱스들
+  const connected = [0];
   const remaining = stars.map((_, i) => i).slice(1);
+  // 각 연결된 별에서 마지막으로 나간 방향 기록
+  const lastAngle: Record<number, number> = {};
 
   while (remaining.length > 0) {
-    // 아직 연결 안 된 별 중 하나를 랜덤 선택
     const ri = Math.floor(rng() * remaining.length);
     const next = remaining.splice(ri, 1)[0];
 
-    // 이미 연결된 별들 중 가까운 상위 3개 안에서 랜덤으로 부모 선택 (분기 생성)
+    // 가까운 상위 5개 후보 중 각도 다양성 우선 선택
     const candidates = connected
-      .map((ci) => ({
-        ci,
-        d: (stars[next].x - stars[ci].x) ** 2 + (stars[next].y - stars[ci].y) ** 2,
-      }))
+      .map((ci) => {
+        const dx = stars[next].x - stars[ci].x;
+        const dy = stars[next].y - stars[ci].y;
+        const d = dx * dx + dy * dy;
+        const angle = Math.atan2(dy, dx);
+        // 직전 방향과의 각도 차이 (없으면 최대 다양성 부여)
+        const prevAngle = lastAngle[ci];
+        const angleDiff = prevAngle !== undefined
+          ? Math.abs(Math.atan2(Math.sin(angle - prevAngle), Math.cos(angle - prevAngle)))
+          : Math.PI;
+        return { ci, d, angle, angleDiff };
+      })
       .sort((a, b) => a.d - b.d)
-      .slice(0, 3);
+      .slice(0, 5);
 
-    const parent = candidates[Math.floor(rng() * candidates.length)].ci;
-    links.push([parent, next]);
+    // 각도 차이가 45도(π/4) 이상인 후보 우선 — 없으면 전체에서 랜덤
+    const angular = candidates.filter((c) => c.angleDiff >= Math.PI / 4);
+    const pool = angular.length > 0 ? angular : candidates;
+    const chosen = pool[Math.floor(rng() * pool.length)];
+
+    lastAngle[chosen.ci] = chosen.angle;
+    links.push([chosen.ci, next]);
     connected.push(next);
   }
   return links;
