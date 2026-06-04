@@ -193,12 +193,13 @@ export default function UniverseCreatePage() {
 
         <div className="rounded-2xl overflow-hidden border border-white/10 mb-6 aspect-[4/3] relative">
           <ConstellationPreview name={name} color={color} favoriteNumber={Number(favoriteNumber) || 7} starPool={starPool} />
-          {starPoolLoading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-              <Loader2 className="w-5 h-5 animate-spin text-white/60" />
-            </div>
-          )}
         </div>
+        {starPoolLoading && (
+          <div className="flex items-center gap-2 mb-2 -mt-4">
+            <Loader2 className="w-3 h-3 animate-spin text-white/40" />
+            <span className="text-xs text-white/40">별 풀 생성 중...</span>
+          </div>
+        )}
 
         <div className="space-y-5">
           <div>
