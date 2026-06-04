@@ -58,7 +58,7 @@ export default function UniverseCreatePage() {
 
   // 닉네임 확정(blur 또는 엔터) 시 딱 1회 AI 호출
   const fetchStarPool = async (nameVal: string) => {
-    if (!nameVal.trim() || poolFetchedForName.current === nameVal.trim()) return;
+    if (!nameVal.trim() || poolFetchedForName.current === nameVal.trim() || starPoolLoading) return;
     poolFetchedForName.current = nameVal.trim();
     setStarPoolLoading(true);
     try {
