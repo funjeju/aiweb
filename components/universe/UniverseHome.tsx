@@ -1441,10 +1441,10 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
         <LangToggle lang={lang} loading={langLoading} onSwitch={switchLang} theme="dark" />
         {user && (
-          <a href="/"
+          <Link href="/"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white transition-colors">
             <Sparkles size={13} />우주 탐험
-          </a>
+          </Link>
         )}
         {isOwner && (
           <button onClick={() => setShowSettings(true)}
@@ -1505,10 +1505,10 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       {/* 비소유자 전용: 메인 복귀 + 별자리 만들기 */}
       {!isOwner && (
         <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
-          <a href="/"
+          <Link href="/"
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-full backdrop-blur-sm border border-white/15 bg-black/40 text-white/55 text-xs font-medium hover:bg-black/60 hover:text-white transition-colors whitespace-nowrap">
             <ChevronLeft size={12} />우주 탐험으로
-          </a>
+          </Link>
           {user && data.personalId && (
             <SaveConstellationButton
               targetId={data.personalId}
