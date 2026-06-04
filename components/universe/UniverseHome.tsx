@@ -12,7 +12,7 @@ import { generateConstellation, generateConstellationFromSeed } from "@/lib/univ
 import { getStarLore } from "@/lib/universe/star-lore";
 import type { ConstellationStar } from "@/lib/universe/stars";
 import { getPublishedUniverses, updatePersonal, getPersonalById, getPersonalsByOwner, getStarNeighbors } from "@/lib/firebase/personals";
-import { getStarComments, addStarComment, deleteStarComment } from "@/lib/firebase/starComments";
+import { getStarComments, getPublicStarComments, addStarComment, deleteStarComment, updateStarCommentVisibility } from "@/lib/firebase/starComments";
 import type { StarComment } from "@/lib/firebase/starComments";
 import { uploadPersonalImage } from "@/lib/firebase/storage";
 import { useAuthStore } from "@/lib/store/authStore";
@@ -951,26 +951,30 @@ function MenuContent({ menu, data, isOwner, onDataUpdate }: {
 
 /* ─── 별 방명록 ─────────────────────────────────── */
 
-function StarComments({ starName, currentUser }: {
+function StarComments({ starName, currentUser, isOwner }: {
   starName: string;
   currentUser: { uid: string; displayName?: string | null; email?: string | null } | null;
+  isOwner: boolean;
 }) {
   const [comments, setComments] = useState<StarComment[] | null>(null);
   const [text, setText] = useState("");
   const [posting, setPosting] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
     setComments(null);
-    getStarComments(starName).then((c) => { if (!cancelled) setComments(c); }).catch(() => setComments([]));
+    // 내 스페이스: 전체 댓글 / 타인 스페이스: 공개 댓글만
+    const fetch = isOwner ? getStarComments(starName) : getPublicStarComments(starName);
+    fetch.then((c) => { if (!cancelled) setComments(c); }).catch(() => setComments([]));
     return () => { cancelled = true; };
-  }, [starName]);
+  }, [starName, isOwner]);
 
   const post = async () => {
     if (!currentUser || !text.trim() || posting) return;
     const authorName = currentUser.displayName || currentUser.email?.split("@")[0] || "익명";
-    const payload = { authorId: currentUser.uid, authorName, text: text.trim() };
+    const payload = { authorId: currentUser.uid, authorName, text: text.trim(), isPublic };
     setPosting(true);
     try {
       const id = await addStarComment(starName, payload);
@@ -987,11 +991,18 @@ function StarComments({ starName, currentUser }: {
     setComments((prev) => prev?.filter((c) => c.id !== commentId) ?? null);
   };
 
+  const toggleVisibility = async (commentId: string, current: boolean) => {
+    await updateStarCommentVisibility(starName, commentId, !current).catch(() => {});
+    setComments((prev) => prev?.map((c) => c.id === commentId ? { ...c, isPublic: !current } : c) ?? null);
+  };
+
+  const publicCount = comments?.filter((c) => c.isPublic).length ?? 0;
+
   return (
     <div className="mt-5 pt-4 border-t border-white/10">
       <p className="text-[11px] text-white/35 mb-3 flex items-center gap-1.5">
         <MessageCircle size={11} />이 별을 공유하는 사람들의 이야기
-        {comments !== null && <span>({comments.length})</span>}
+        {comments !== null && <span>({isOwner ? comments.length : publicCount})</span>}
       </p>
 
       {/* 댓글 목록 */}
@@ -1008,11 +1019,23 @@ function StarComments({ starName, currentUser }: {
               {c.authorName[0]}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 mb-0.5">
+              <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                 <span className="text-[10px] text-white/40 font-medium">{c.authorName}</span>
                 <span className="text-[9px] text-white/20">
                   {new Date(c.createdAt).toLocaleDateString("ko", { month: "short", day: "numeric" })}
                 </span>
+                {/* 공개 여부 뱃지 — 내 스페이스에서만 표시 */}
+                {isOwner && currentUser?.uid === c.authorId && (
+                  <button
+                    onClick={() => toggleVisibility(c.id, c.isPublic)}
+                    className={cn("text-[9px] px-1.5 py-0.5 rounded-full border transition-colors",
+                      c.isPublic
+                        ? "border-violet-400/50 text-violet-300 bg-violet-500/10"
+                        : "border-white/15 text-white/25 hover:border-white/30"
+                    )}>
+                    {c.isPublic ? "공개" : "비공개"}
+                  </button>
+                )}
               </div>
               <p className="text-xs text-white/75 leading-relaxed break-words">{c.text}</p>
             </div>
@@ -1028,19 +1051,31 @@ function StarComments({ starName, currentUser }: {
 
       {/* 입력 */}
       {currentUser ? (
-        <div className="flex gap-2">
-          <input
-            ref={inputRef}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && post()}
-            placeholder="이 별에 메시지를 남겨보세요..."
-            maxLength={120}
-            className="flex-1 px-3 py-2 rounded-full bg-white/8 border border-white/15 text-xs text-white placeholder-white/25 focus:border-violet-400 focus:outline-none"
-          />
-          <button onClick={post} disabled={posting || !text.trim()}
-            className="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center hover:bg-violet-600 disabled:opacity-40 transition-colors shrink-0">
-            {posting ? <Loader2 size={12} className="animate-spin text-white" /> : <Send size={12} className="text-white" />}
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input
+              ref={inputRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && post()}
+              placeholder="이 별에 메시지를 남겨보세요..."
+              maxLength={120}
+              className="flex-1 px-3 py-2 rounded-full bg-white/8 border border-white/15 text-xs text-white placeholder-white/25 focus:border-violet-400 focus:outline-none"
+            />
+            <button onClick={post} disabled={posting || !text.trim()}
+              className="w-8 h-8 rounded-full bg-violet-500 flex items-center justify-center hover:bg-violet-600 disabled:opacity-40 transition-colors shrink-0">
+              {posting ? <Loader2 size={12} className="animate-spin text-white" /> : <Send size={12} className="text-white" />}
+            </button>
+          </div>
+          {/* 공개 여부 토글 */}
+          <button
+            onClick={() => setIsPublic((v) => !v)}
+            className={cn("flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border transition-colors",
+              isPublic
+                ? "border-violet-400/50 text-violet-300 bg-violet-500/10"
+                : "border-white/15 text-white/30 hover:border-white/25"
+            )}>
+            {isPublic ? "🌐 공개 — 이 별을 공유하는 모든 우주에 보여요" : "🔒 비공개 — 내 우주에서만 보여요"}
           </button>
         </div>
       ) : (
@@ -1633,7 +1668,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
               </div>
               <p className="text-white/70 text-sm leading-relaxed">{lore.desc}</p>
               <StarNeighbors starName={clickedStar.star.name} excludeId={data.personalId} color={data.color} />
-              <StarComments starName={clickedStar.star.name} currentUser={user} />
+              <StarComments starName={clickedStar.star.name} currentUser={user} isOwner={isOwner} />
             </div>
           </div>
         );
