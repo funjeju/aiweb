@@ -933,7 +933,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       })}
 
       {/* 하단 CTA */}
-      <div className="absolute bottom-0 inset-x-0 flex flex-col items-center gap-3 z-20 pointer-events-none" style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 20px) + 2rem)" }}>
+      <div className="absolute bottom-0 inset-x-0 flex flex-col items-center gap-3 z-20 pointer-events-none" style={{ paddingBottom: "max(5rem, env(safe-area-inset-bottom, 20px) + 4rem)" }}>
         {myConstellationId ? (
           <Link
             href={`/p/${myConstellationId}`}
