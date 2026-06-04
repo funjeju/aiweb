@@ -879,28 +879,18 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
         </div>
       )}
 
-      {/* 방향 힌트 (가까운 4개) — 화면 가장자리 배치 */}
+      {/* 방향 힌트 (가까운 4개) — 화면 크기 비례 반경 배치 */}
       {nearestHints.map((hint, i) => {
-        // 방향 벡터가 화면 가장자리와 만나는 지점 계산 (padding 80px)
-        const pad = 100;
-        const hw = (vw / 2) - pad;
-        const hh = (vh / 2) - pad;
-        const cos = Math.cos(hint.angle);
-        const sin = Math.sin(hint.angle);
-        // x, y 방향 중 먼저 가장자리에 닿는 쪽 기준
-        const tx = cos === 0 ? Infinity : hw / Math.abs(cos);
-        const ty = sin === 0 ? Infinity : hh / Math.abs(sin);
-        const t = Math.min(tx, ty);
-        const ex = vw / 2 + cos * t;
-        const ey = vh / 2 + sin * t;
+        // 화면 크기의 30% 반경 — 뭉침 방지, 가장자리 근처 분산
+        const radius = vw > 0 ? Math.min(vw, vh) * 0.32 : 130;
 
         return (
         <div
           key={i}
           className="absolute z-10 pointer-events-none"
           style={{
-            left: ex,
-            top: ey,
+            left: `calc(50% + ${Math.cos(hint.angle) * radius}px)`,
+            top: `calc(50% + ${Math.sin(hint.angle) * radius}px)`,
             transform: "translate(-50%, -50%)",
           }}
         >
