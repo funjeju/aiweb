@@ -1241,18 +1241,33 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
 
       {/* 하단 CTA */}
       <div className="absolute bottom-0 inset-x-0 flex flex-col items-center gap-3 z-20 pointer-events-none" style={{ paddingBottom: "max(5rem, env(safe-area-inset-bottom, 20px) + 4rem)" }}>
-        {myConstellationId ? (
+
+        {/* 케이스 1: 별자리 있음 → 내 별자리로 가기 + 추가 버튼(유료) */}
+        {myConstellationId && (
+          <div className="pointer-events-auto flex items-center gap-2">
+            <Link
+              href={`/p/${myConstellationId}`}
+              className="flex items-center gap-2 px-7 py-3.5 rounded-full font-bold text-white text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-violet-900/40 select-none"
+              style={{ background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)" }}
+            >
+              <Sparkles size={16} />
+              나의 별자리로 가기
+            </Link>
+            <button
+              disabled
+              title="곧 출시 예정 (유료)"
+              className="flex items-center gap-1.5 px-4 py-3.5 rounded-full text-sm font-semibold text-white/40 border border-white/15 bg-white/5 cursor-not-allowed select-none"
+            >
+              <Plus size={15} />
+              별자리 추가
+            </button>
+          </div>
+        )}
+
+        {/* 케이스 2: 로그인 + 별자리 없음 → 만들기 (바로 생성 페이지) */}
+        {user && !myConstellationId && (
           <Link
-            href={`/p/${myConstellationId}`}
-            className="pointer-events-auto flex items-center gap-2 px-7 py-3.5 rounded-full font-bold text-white text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-violet-900/40 select-none"
-            style={{ background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)" }}
-          >
-            <Sparkles size={16} />
-            나의 별자리로 가기
-          </Link>
-        ) : (
-          <Link
-            href={user ? "/private" : "/signup?from=/private"}
+            href="/private"
             className="pointer-events-auto flex items-center gap-2 px-7 py-3.5 rounded-full font-bold text-white text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-violet-900/40 select-none"
             style={{ background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)" }}
           >
@@ -1260,12 +1275,24 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
             나만의 별자리 만들기
           </Link>
         )}
+
+        {/* 케이스 3: 비로그인 → 만들기 (회원가입 유도) */}
         {!user && (
-          <p className="text-white/25 text-xs select-none">이미 계정이 있으신가요?{" "}
-            <Link href="/login" className="text-violet-400/70 hover:text-violet-400 pointer-events-auto underline underline-offset-2 transition-colors">
-              로그인
+          <>
+            <Link
+              href="/signup?from=/private"
+              className="pointer-events-auto flex items-center gap-2 px-7 py-3.5 rounded-full font-bold text-white text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-violet-900/40 select-none"
+              style={{ background: "linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)" }}
+            >
+              <Sparkles size={16} />
+              나만의 별자리 만들기
             </Link>
-          </p>
+            <p className="text-white/25 text-xs select-none">이미 계정이 있으신가요?{" "}
+              <Link href="/login" className="text-violet-400/70 hover:text-violet-400 pointer-events-auto underline underline-offset-2 transition-colors">
+                로그인
+              </Link>
+            </p>
+          </>
         )}
       </div>
     </div>
