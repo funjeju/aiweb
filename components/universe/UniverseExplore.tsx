@@ -1236,37 +1236,36 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
         );
       })}
 
-      {/* 하단 미니 BGM 플레이어 */}
-      {user && myTracks.length > 0 && (
-        <div className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-auto flex items-center gap-1.5 px-3 py-2 rounded-full bg-black/50 backdrop-blur-sm border border-white/10"
-          style={{ bottom: "max(6.5rem, env(safe-area-inset-bottom, 20px) + 5.5rem)" }}>
-          {myTracks.length > 1 && (
-            <button
-              onClick={() => setMyTrackIdx((myTrackIdx - 1 + myTracks.length) % myTracks.length)}
-              className="text-white/40 hover:text-white/80 transition-colors">
-              <SkipBack size={11} />
-            </button>
-          )}
-          <button
-            onClick={() => (isPlaying && mode === "mine") ? pause() : play()}
-            className="text-white/70 hover:text-white transition-colors">
-            {(isPlaying && mode === "mine") ? <Pause size={14} /> : <Play size={14} />}
-          </button>
-          {myTracks.length > 1 && (
-            <button
-              onClick={() => setMyTrackIdx((myTrackIdx + 1) % myTracks.length)}
-              className="text-white/40 hover:text-white/80 transition-colors">
-              <SkipForward size={11} />
-            </button>
-          )}
-          <span className="text-white/40 text-[10px] max-w-[90px] truncate ml-1">
-            {myTracks[myTrackIdx]?.name ?? "—"}
-          </span>
-        </div>
-      )}
+      {/* 하단 CTA + 미니 BGM 플레이어 */}
+      <div className="absolute bottom-0 inset-x-0 flex flex-col items-center gap-2.5 z-20 pointer-events-none" style={{ paddingBottom: "max(5rem, env(safe-area-inset-bottom, 20px) + 4rem)" }}>
 
-      {/* 하단 CTA */}
-      <div className="absolute bottom-0 inset-x-0 flex flex-col items-center gap-3 z-20 pointer-events-none" style={{ paddingBottom: "max(5rem, env(safe-area-inset-bottom, 20px) + 4rem)" }}>
+        {/* 미니 BGM 플레이어 — CTA 위에 자연스럽게 쌓임 */}
+        {user && myTracks.length > 0 && (
+          <div className="pointer-events-auto flex items-center gap-1.5 px-3 py-2 rounded-full bg-black/50 backdrop-blur-sm border border-white/10">
+            {myTracks.length > 1 && (
+              <button
+                onClick={() => setMyTrackIdx((myTrackIdx - 1 + myTracks.length) % myTracks.length)}
+                className="text-white/40 hover:text-white/80 transition-colors">
+                <SkipBack size={11} />
+              </button>
+            )}
+            <button
+              onClick={() => (isPlaying && mode === "mine") ? pause() : play()}
+              className="text-white/70 hover:text-white transition-colors">
+              {(isPlaying && mode === "mine") ? <Pause size={14} /> : <Play size={14} />}
+            </button>
+            {myTracks.length > 1 && (
+              <button
+                onClick={() => setMyTrackIdx((myTrackIdx + 1) % myTracks.length)}
+                className="text-white/40 hover:text-white/80 transition-colors">
+                <SkipForward size={11} />
+              </button>
+            )}
+            <span className="text-white/40 text-[10px] max-w-[90px] truncate ml-1">
+              {myTracks[myTrackIdx]?.name ?? "—"}
+            </span>
+          </div>
+        )}
 
         {/* 케이스 1: 별자리 있음 → 내 별자리로 가기 + 추가 버튼(유료) */}
         {myConstellationId && (
