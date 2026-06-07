@@ -327,6 +327,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     x: number; y: number;
     vx: number; vy: number;
     life: number; maxLife: number;
+    absorbing?: boolean; // 블랙홀 흡수 중
   }
   const shootingStarsRef = useRef<ShootingStar[]>([]);
   const shootingStarTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -542,6 +543,11 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     const tilesX = Math.ceil(W / tileW) + 2;
     const tilesY = Math.ceil(H / tileH) + 2;
 
+    // 블랙홀 스크린 좌표 사전 계산 (중력 렌즈 + 혜성 흡수에 공용)
+    const bhScreen = blackHoles
+      .map((bh) => ({ bh, bx: sx(bh.x), by: sy(bh.y), R: Math.max(28, 40 * zoom) }))
+      .filter(({ bx, by }) => bx > -500 && bx < W + 500 && by > -500 && by < H + 500);
+
     /* 워프 진행 */
     const warp = warpRef.current;
     let warpStretch = 0; // 0 = 점, 1 = 최대 늘어남
@@ -589,14 +595,28 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
           ctx.globalAlpha = Math.max(0, alpha);
           ctx.fillStyle = "#e8ecff";
 
+          // 중력 렌즈: 블랙홀 근방 배경별을 미세하게 당김
+          let lpx = px, lpy = py;
+          for (const { bx, by, R } of bhScreen) {
+            const dx = bx - px, dy = by - py;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const lensR = R * 7;
+            if (dist > R && dist < lensR) {
+              const t2 = 1 - dist / lensR;
+              const pull = 0.18 * t2 * t2;
+              lpx += (dx / dist) * dist * pull;
+              lpy += (dy / dist) * dist * pull;
+            }
+          }
+
           if (warpStretch > 0) {
             // 별을 화면 중심 기준으로 방사형으로 늘어나게
-            const dx = px - W / 2;
-            const dy = py - H / 2;
+            const dx = lpx - W / 2;
+            const dy = lpy - H / 2;
             const len = Math.sqrt(dx * dx + dy * dy) || 1;
             const stretch = 1 + warpStretch * 25 * (len / (Math.max(W, H) * 0.5));
             ctx.save();
-            ctx.translate(px, py);
+            ctx.translate(lpx, lpy);
             ctx.rotate(Math.atan2(dy, dx));
             ctx.scale(stretch, 1);
             ctx.beginPath();
@@ -605,7 +625,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
             ctx.restore();
           } else {
             ctx.beginPath();
-            ctx.arc(px, py, s.r, 0, Math.PI * 2);
+            ctx.arc(lpx, lpy, s.r, 0, Math.PI * 2);
             ctx.fill();
           }
         }
@@ -613,24 +633,50 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     }
     ctx.globalAlpha = 1;
 
-    /* 별똥별 */
+    /* 별똥별 + 블랙홀 흡수 */
     shootingStarsRef.current = shootingStarsRef.current.filter((ss) => ss.life < ss.maxLife);
     for (const ss of shootingStarsRef.current) {
-      const progress = ss.life / ss.maxLife;
-      const alpha = progress < 0.15 ? progress / 0.15 : progress > 0.7 ? 1 - (progress - 0.7) / 0.3 : 1;
       const px = ss.x * W, py = ss.y * H;
-      const tailX = px - ss.vx * W * 18, tailY = py - ss.vy * H * 18;
-      const lg = ctx.createLinearGradient(tailX, tailY, px, py);
-      lg.addColorStop(0, "rgba(255,255,255,0)");
-      lg.addColorStop(0.6, `rgba(255,255,255,${alpha * 0.4})`);
-      lg.addColorStop(1, `rgba(255,255,255,${alpha})`);
-      ctx.strokeStyle = lg; ctx.lineWidth = 1.5; ctx.globalAlpha = alpha;
-      ctx.beginPath(); ctx.moveTo(tailX, tailY); ctx.lineTo(px, py); ctx.stroke();
-      const glow = ctx.createRadialGradient(px, py, 0, px, py, 6);
-      glow.addColorStop(0, `rgba(255,255,255,${alpha})`);
-      glow.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = glow; ctx.globalAlpha = alpha * 0.8;
-      ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill();
+
+      // 블랙홀 중력 적용
+      for (const { bx, by, R } of bhScreen) {
+        const dx = (bx - px) / W;
+        const dy = (by - py) / H;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const gravR = (R * 6) / Math.min(W, H);
+        if (dist < gravR && dist > 0.001) {
+          const strength = 0.00022 * ((1 - dist / gravR) ** 2);
+          ss.vx += (dx / dist) * strength;
+          ss.vy += (dy / dist) * strength;
+          ss.absorbing = true;
+          // 매우 가까우면 즉시 흡수
+          if (dist < (R * 1.4) / Math.min(W, H)) {
+            ss.life = ss.maxLife;
+          }
+        }
+      }
+
+      const progress = ss.life / ss.maxLife;
+      // 흡수 중일 때 더 빠르게 페이드아웃
+      const alpha = ss.absorbing
+        ? Math.max(0, 1 - progress * 2.5)
+        : (progress < 0.15 ? progress / 0.15 : progress > 0.7 ? 1 - (progress - 0.7) / 0.3 : 1);
+
+      if (alpha > 0.01) {
+        const tailX = px - ss.vx * W * 18, tailY = py - ss.vy * H * 18;
+        const lg = ctx.createLinearGradient(tailX, tailY, px, py);
+        lg.addColorStop(0, "rgba(255,255,255,0)");
+        lg.addColorStop(0.6, `rgba(255,255,255,${alpha * 0.4})`);
+        lg.addColorStop(1, `rgba(255,255,255,${alpha})`);
+        ctx.strokeStyle = lg; ctx.lineWidth = 1.5; ctx.globalAlpha = alpha;
+        ctx.beginPath(); ctx.moveTo(tailX, tailY); ctx.lineTo(px, py); ctx.stroke();
+        const glow = ctx.createRadialGradient(px, py, 0, px, py, 6);
+        glow.addColorStop(0, `rgba(255,255,255,${alpha})`);
+        glow.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = glow; ctx.globalAlpha = alpha * 0.8;
+        ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill();
+      }
+
       ss.x += ss.vx; ss.y += ss.vy; ss.life++;
     }
     ctx.globalAlpha = 1;
@@ -758,72 +804,52 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       ctx.globalAlpha = 1;
     }
 
-    /* ── 블랙홀 렌더 ── */
-    for (const bh of blackHoles) {
-      const bx = sx(bh.x), by = sy(bh.y);
-      if (bx < -300 || bx > W + 300 || by < -300 || by > H + 300) continue;
+    /* ── 블랙홀 렌더 (은은한 밤하늘 감성) ── */
+    for (const { bh, bx, by, R } of bhScreen) {
+      // 호흡 주기: ~10초 (2π / 0.000628 ≈ 10000ms), bh.x로 위상 오프셋
+      const breathe = 0.82 + 0.18 * Math.sin(t * 0.000628 + bh.x * 0.00025);
 
-      const pulse = 0.85 + 0.15 * Math.sin(t * 0.0008 + bh.x * 0.0003);
-      const R = Math.max(28, 40 * zoom);
+      // 1. 넓고 매우 흐린 외곽 광휘 (존재감만)
+      const outerHalo = ctx.createRadialGradient(bx, by, R * 0.5, bx, by, R * 8);
+      outerHalo.addColorStop(0,   `rgba(100,50,200,${0.09 * breathe})`);
+      outerHalo.addColorStop(0.35,`rgba(70,20,160,${0.05 * breathe})`);
+      outerHalo.addColorStop(0.7, `rgba(40,10,100,${0.025 * breathe})`);
+      outerHalo.addColorStop(1,   "rgba(0,0,0,0)");
+      ctx.fillStyle = outerHalo; ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(bx, by, R * 8, 0, Math.PI * 2); ctx.fill();
 
-      // 외곽 헤일로 (넓게 퍼지는 보라빛)
-      const halo = ctx.createRadialGradient(bx, by, R * 1.2, bx, by, R * 5.5);
-      halo.addColorStop(0, `rgba(120,60,220,${0.13 * pulse})`);
-      halo.addColorStop(0.5, `rgba(80,20,180,${0.06 * pulse})`);
-      halo.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = halo; ctx.globalAlpha = 1;
-      ctx.beginPath(); ctx.arc(bx, by, R * 5.5, 0, Math.PI * 2); ctx.fill();
+      // 2. 중간 보라빛 코로나 (에지 글로우)
+      const corona = ctx.createRadialGradient(bx, by, R * 0.85, bx, by, R * 2.8);
+      corona.addColorStop(0,   `rgba(130,60,240,${0.32 * breathe})`);
+      corona.addColorStop(0.45,`rgba(90,30,180,${0.14 * breathe})`);
+      corona.addColorStop(1,   "rgba(0,0,0,0)");
+      ctx.fillStyle = corona; ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(bx, by, R * 2.8, 0, Math.PI * 2); ctx.fill();
 
-      // 강착원반 — 기울어진 타원 고리 (도플러: 왼쪽 밝음)
-      const diskRings = [
-        { rx: R * 2.6, ry: R * 0.65, alpha: 0.55 * pulse, colorL: "#e8c070", colorR: "#7040c0" },
-        { rx: R * 1.9, ry: R * 0.48, alpha: 0.70 * pulse, colorL: "#ffdb88", colorR: "#5030a0" },
-      ];
-      for (const dr of diskRings) {
-        ctx.save();
-        ctx.translate(bx, by);
-        const diskGrad = ctx.createLinearGradient(-dr.rx, 0, dr.rx, 0);
-        diskGrad.addColorStop(0,   dr.colorL + "dd");
-        diskGrad.addColorStop(0.5, "rgba(255,200,80,0.15)");
-        diskGrad.addColorStop(1,   dr.colorR + "88");
-        ctx.strokeStyle = diskGrad;
-        ctx.lineWidth = dr.ry * 0.6;
-        ctx.globalAlpha = dr.alpha;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, dr.rx, dr.ry, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // 광자구 (photon sphere) — 얇은 흰 링
-      ctx.save();
-      ctx.translate(bx, by);
-      ctx.strokeStyle = `rgba(255,255,255,${0.22 * pulse})`;
-      ctx.lineWidth = 1.2;
-      ctx.globalAlpha = 1;
-      ctx.beginPath(); ctx.arc(0, 0, R * 1.28, 0, Math.PI * 2); ctx.stroke();
-      ctx.restore();
-
-      // 사건의 지평선 (완전한 검정)
-      const evGlow = ctx.createRadialGradient(bx, by, R * 0.3, bx, by, R * 1.1);
-      evGlow.addColorStop(0, "rgba(0,0,0,1)");
-      evGlow.addColorStop(0.7, "rgba(5,0,15,1)");
-      evGlow.addColorStop(1, "rgba(30,0,60,0.6)");
-      ctx.fillStyle = evGlow; ctx.globalAlpha = 1;
+      // 3. 내부 전이 영역 (검정→보라→검정)
+      const inner = ctx.createRadialGradient(bx, by, R * 0.6, bx, by, R * 1.1);
+      inner.addColorStop(0,   "rgba(0,0,0,0)");
+      inner.addColorStop(0.55,`rgba(60,15,120,${0.4 * breathe})`);
+      inner.addColorStop(1,   "rgba(0,0,0,0)");
+      ctx.fillStyle = inner; ctx.globalAlpha = 1;
       ctx.beginPath(); ctx.arc(bx, by, R * 1.1, 0, Math.PI * 2); ctx.fill();
 
-      // 국가 방향 가이드 (줌이 충분할 때)
+      // 4. 사건의 지평선 — 완전한 검정
+      ctx.fillStyle = "#000000"; ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(bx, by, R * 0.92, 0, Math.PI * 2); ctx.fill();
+
+      // 5. 국가 방향 레이블 (줌 충분 시, 매우 은은하게)
       if (zoom > 0.45) {
         const flagA = countryFlag(bh.zoneA);
         const flagB = countryFlag(bh.zoneB);
-        ctx.font = `${Math.round(13 * zoom)}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.font = `${Math.round(12 * zoom)}px ui-sans-serif, system-ui, sans-serif`;
         ctx.textAlign = "center";
-        ctx.globalAlpha = 0.55 * pulse;
-        ctx.fillStyle = "#c8b8f8";
-        ctx.shadowColor = "rgba(0,0,0,0.9)";
-        ctx.shadowBlur = 6;
-        ctx.fillText(`${flagA} ${bh.zoneA}`, bx, by - R * 2.2);
-        ctx.fillText(`${flagB} ${bh.zoneB}`, bx, by + R * 2.2 + 14 * zoom);
+        ctx.globalAlpha = 0.38 * breathe;
+        ctx.fillStyle = "#b8a8e8";
+        ctx.shadowColor = "rgba(0,0,0,1)";
+        ctx.shadowBlur = 8;
+        ctx.fillText(`${flagA} ${bh.zoneA}`, bx, by - R * 2.4);
+        ctx.fillText(`${flagB} ${bh.zoneB}`, bx, by + R * 2.4 + 13 * zoom);
         ctx.shadowBlur = 0;
       }
       ctx.globalAlpha = 1;
