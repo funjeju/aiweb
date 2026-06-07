@@ -148,7 +148,11 @@ export interface PersonalSchema {
       url: string;
       name: string;
       autoPlay?: boolean;
+      isDefault?: boolean;
+      volume?: number;
     }>;
+    /** 방문 시 랜덤 트랙 재생 */
+    bgmShuffle?: boolean;
     /** 메뉴 노드 위치 — 데스크탑 */
     menuLayout?: Record<string, { top: string; left: string }>;
     /** 메뉴 노드 위치 — 모바일 (별도 저장) */

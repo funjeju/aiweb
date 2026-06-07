@@ -61,6 +61,7 @@ export interface UniverseData {
   shootingStarIntervalSec?: number;
   selectedAssets?: string[];
   bgmList?: BgmTrack[];
+  bgmShuffle?: boolean;
   menuLayout?: Record<string, { top: string; left: string }>;
   menuLayoutMobile?: Record<string, { top: string; left: string }>;
   assetPositions?: Record<string, { top: string; left: string }>;
@@ -1371,9 +1372,17 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   // ── BGM 다중 트랙 관리 ──────────────────────────
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [bgmPlaying, setBgmPlaying] = useState(false);
-  const [trackIdx, setTrackIdx] = useState(0);
-
   const bgmList = data.bgmList ?? [];
+  const bgmShuffle = data.bgmShuffle ?? false;
+
+  // 초기 트랙 인덱스: 랜덤이면 랜덤, 아니면 isDefault 트랙, 없으면 0
+  const [trackIdx, setTrackIdx] = useState(() => {
+    if (bgmList.length === 0) return 0;
+    if (bgmShuffle) return Math.floor(Math.random() * bgmList.length);
+    const defaultIdx = bgmList.findIndex((t) => t.isDefault);
+    return defaultIdx >= 0 ? defaultIdx : 0;
+  });
+
   const currentTrack = bgmList[trackIdx] ?? null;
 
   useEffect(() => {
@@ -1383,24 +1392,25 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       setBgmPlaying(false);
       return;
     }
-    if (audioRef.current && audioRef.current.src !== currentTrack.url) {
+    // 트랙이 바뀌면 기존 오디오 완전히 교체
+    if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = "";
       audioRef.current = null;
       setBgmPlaying(false);
     }
-    if (!audioRef.current) {
-      const audio = new Audio(currentTrack.url);
-      audio.loop = true;
-      audio.volume = currentTrack.volume ?? 1;
-      audioRef.current = audio;
+    const audio = new Audio(currentTrack.url);
+    audio.loop = true;
+    audio.volume = currentTrack.volume ?? 1;
+    audioRef.current = audio;
+
+    // autoPlay(구버전 호환) 또는 isDefault 이면 자동재생 시도
+    if (currentTrack.autoPlay || currentTrack.isDefault || bgmShuffle) {
+      audio.play().then(() => setBgmPlaying(true)).catch(() => {});
     }
-    if (currentTrack.autoPlay) {
-      audioRef.current.play().then(() => setBgmPlaying(true)).catch(() => {});
-    }
-    return () => { audioRef.current?.pause(); };
+    return () => { audio.pause(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTrack?.url, currentTrack?.autoPlay]);
+  }, [currentTrack?.url]);
 
   // 볼륨 설정 변경 즉시 반영
   useEffect(() => {
@@ -1414,20 +1424,21 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
     else { audio.play().then(() => setBgmPlaying(true)).catch(() => {}); }
   };
 
-  const prevTrack = () => {
-    if (bgmList.length < 2) return;
-    setTrackIdx((i) => (i - 1 + bgmList.length) % bgmList.length);
+  const switchTrack = (idx: number) => {
     audioRef.current?.pause();
     audioRef.current = null;
     setBgmPlaying(false);
+    setTrackIdx(idx);
+  };
+
+  const prevTrack = () => {
+    if (bgmList.length < 2) return;
+    switchTrack((trackIdx - 1 + bgmList.length) % bgmList.length);
   };
 
   const nextTrack = () => {
     if (bgmList.length < 2) return;
-    setTrackIdx((i) => (i + 1) % bgmList.length);
-    audioRef.current?.pause();
-    audioRef.current = null;
-    setBgmPlaying(false);
+    switchTrack((trackIdx + 1) % bgmList.length);
   };
   const isOwner = !!user && !!data.ownerId && user.uid === data.ownerId;
 
@@ -1504,6 +1515,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   const handleSettingsSaved = (state: {
     selectedAssets: string[];
     bgmList: BgmTrack[];
+    bgmShuffle: boolean;
     menus: UniverseMenu[];
     menuLayout: Record<string, { top: string; left: string }>;
     menuLayoutMobile: Record<string, { top: string; left: string }>;
@@ -1515,6 +1527,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       ...prev,
       selectedAssets: state.selectedAssets,
       bgmList: state.bgmList,
+      bgmShuffle: state.bgmShuffle,
       menus: state.menus,
       menuLayout:         Object.keys(state.menuLayout).length         > 0 ? state.menuLayout         : undefined,
       menuLayoutMobile:   Object.keys(state.menuLayoutMobile).length   > 0 ? state.menuLayoutMobile   : undefined,
@@ -1885,6 +1898,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           menus={data.menus ?? []}
           initialAssets={data.selectedAssets ?? []}
           initialBgmList={bgmList}
+          initialBgmShuffle={data.bgmShuffle}
           initialLayout={data.menuLayout}
           initialLayoutMobile={data.menuLayoutMobile}
           initialAssetPositions={data.assetPositions}

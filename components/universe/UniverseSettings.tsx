@@ -16,11 +16,12 @@ type Tab = "assets" | "bgm" | "layout" | "color";
 
 interface MenuNode { id: string; label: string; icon: UniverseIconType; customIcon?: string; }
 
-export interface BgmTrack { url: string; name: string; autoPlay?: boolean; volume?: number; }
+export interface BgmTrack { url: string; name: string; autoPlay?: boolean; volume?: number; isDefault?: boolean; }
 
 interface SettingsState {
   selectedAssets: string[];
   bgmList: BgmTrack[];
+  bgmShuffle: boolean;
   menus: MenuNode[];
   menuLayout: Record<string, { top: string; left: string }>;
   menuLayoutMobile: Record<string, { top: string; left: string }>;
@@ -436,23 +437,45 @@ function LayoutTab({
 function BgmTab({
   personalId,
   bgmList,
+  bgmShuffle,
   onChange,
+  onShuffleChange,
   bgmPlaying,
   onToggleBgm,
 }: {
   personalId: string;
   bgmList: BgmTrack[];
+  bgmShuffle: boolean;
   onChange: (list: BgmTrack[]) => void;
+  onShuffleChange: (v: boolean) => void;
   bgmPlaying: boolean;
   onToggleBgm: () => void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [previewIdx, setPreviewIdx] = useState<number | null>(null);
+  const previewRef = useRef<HTMLAudioElement | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const MAX = 3;
 
-  // 재생 버튼: 메인 플레이어 직접 제어 (동기화)
-  const togglePreview = () => {
-    onToggleBgm();
+  const previewTrack = (idx: number) => {
+    // 이미 재생 중인 트랙 클릭 → 정지
+    if (previewIdx === idx) {
+      previewRef.current?.pause();
+      previewRef.current = null;
+      setPreviewIdx(null);
+      return;
+    }
+    // 다른 트랙 클릭 → 기존 정지 후 새 트랙 재생
+    previewRef.current?.pause();
+    previewRef.current = null;
+    const track = bgmList[idx];
+    if (!track) return;
+    const audio = new Audio(track.url);
+    audio.volume = track.volume ?? 1;
+    audio.play().catch(() => {});
+    audio.onended = () => { setPreviewIdx(null); previewRef.current = null; };
+    previewRef.current = audio;
+    setPreviewIdx(idx);
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -462,7 +485,7 @@ function BgmTab({
     try {
       const url = await uploadPersonalAudio(personalId, file);
       const name = file.name.replace(/\.[^.]+$/, "");
-      onChange([...bgmList, { url, name, autoPlay: false }]);
+      onChange([...bgmList, { url, name, isDefault: false }]);
     } catch {
       alert("업로드에 실패했습니다.");
     } finally {
@@ -472,16 +495,16 @@ function BgmTab({
   };
 
   const remove = (idx: number) => {
-    if (bgmPlaying) onToggleBgm(); // 재생 중이면 정지 후 삭제
+    if (previewIdx === idx) { previewRef.current?.pause(); previewRef.current = null; setPreviewIdx(null); }
     onChange(bgmList.filter((_, i) => i !== idx));
   };
 
-  const toggleAutoPlay = (idx: number) =>
-    onChange(bgmList.map((t, i) => i === idx ? { ...t, autoPlay: !t.autoPlay } : t));
+  // 기본값(방문 시 자동재생) 토글 — 하나만 켤 수 있음
+  const toggleDefault = (idx: number) =>
+    onChange(bgmList.map((t, i) => ({ ...t, isDefault: i === idx ? !t.isDefault : false })));
 
-  const setVolume = (idx: number, vol: number) => {
+  const setVolume = (idx: number, vol: number) =>
     onChange(bgmList.map((t, i) => i === idx ? { ...t, volume: vol } : t));
-  };
 
   return (
     <div className="space-y-4">
@@ -490,16 +513,37 @@ function BgmTab({
         MP3 · WAV · OGG 형식 지원
       </p>
 
+      {/* 랜덤재생 토글 */}
+      {bgmList.length > 1 && (
+        <label className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white/5 border border-white/10 cursor-pointer">
+          <div>
+            <p className="text-sm font-medium text-white">🎲 랜덤재생</p>
+            <p className="text-[11px] text-white/40">방문 시 목록 중 랜덤으로 재생</p>
+          </div>
+          <div onClick={() => onShuffleChange(!bgmShuffle)}
+            className={cn("w-9 h-5 rounded-full transition-colors relative shrink-0",
+              bgmShuffle ? "bg-violet-500" : "bg-white/20")}>
+            <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform",
+              bgmShuffle ? "translate-x-4" : "translate-x-0.5")} />
+          </div>
+        </label>
+      )}
+
       {/* 트랙 목록 */}
       {bgmList.length > 0 && (
         <div className="space-y-2">
           {bgmList.map((track, i) => (
             <div key={track.url + i} className="rounded-2xl bg-white/5 border border-white/10 p-3 space-y-2">
               <div className="flex items-center gap-3">
-                {/* 메인 플레이어와 동기화된 재생 버튼 */}
-                <button onClick={togglePreview}
-                  className="w-9 h-9 rounded-full bg-violet-500/30 border border-violet-400/50 flex items-center justify-center text-white hover:bg-violet-500/50 transition-colors shrink-0">
-                  {bgmPlaying ? <Pause size={14} /> : <Play size={14} />}
+                {/* 개별 프리뷰 재생 버튼 */}
+                <button onClick={() => previewTrack(i)}
+                  className={cn(
+                    "w-9 h-9 rounded-full border flex items-center justify-center transition-colors shrink-0",
+                    previewIdx === i
+                      ? "bg-violet-500 border-violet-400 text-white"
+                      : "bg-violet-500/20 border-violet-400/40 text-white hover:bg-violet-500/40"
+                  )}>
+                  {previewIdx === i ? <Pause size={14} /> : <Play size={14} />}
                 </button>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{track.name}</p>
@@ -523,16 +567,16 @@ function BgmTab({
                   {Math.round((track.volume ?? 1) * 100)}%
                 </span>
               </div>
-              {/* 자동재생 토글 (첫 번째 트랙에만) */}
-              {i === 0 && (
+              {/* 기본값 토글 (랜덤재생 꺼져있을 때만 의미 있음) */}
+              {!bgmShuffle && (
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <div onClick={() => toggleAutoPlay(0)}
+                  <div onClick={() => toggleDefault(i)}
                     className={cn("w-9 h-5 rounded-full transition-colors relative cursor-pointer",
-                      track.autoPlay ? "bg-violet-500" : "bg-white/20")}>
+                      track.isDefault ? "bg-violet-500" : "bg-white/20")}>
                     <div className={cn("absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform",
-                      track.autoPlay ? "translate-x-4" : "translate-x-0.5")} />
+                      track.isDefault ? "translate-x-4" : "translate-x-0.5")} />
                   </div>
-                  <span className="text-xs text-white/60">방문 시 자동재생</span>
+                  <span className="text-xs text-white/60">기본값 (방문 시 자동재생)</span>
                 </label>
               )}
             </div>
@@ -720,6 +764,7 @@ export function UniverseSettings({
   menus: initialMenus,
   initialAssets,
   initialBgmList,
+  initialBgmShuffle = false,
   initialLayout,
   initialLayoutMobile,
   initialAssetPositions,
@@ -737,6 +782,7 @@ export function UniverseSettings({
   menus: MenuNode[];
   initialAssets: string[];
   initialBgmList: BgmTrack[];
+  initialBgmShuffle?: boolean;
   initialLayout?: Record<string, { top: string; left: string }>;
   initialLayoutMobile?: Record<string, { top: string; left: string }>;
   initialAssetPositions?: Record<string, { top: string; left: string }>;
@@ -755,6 +801,7 @@ export function UniverseSettings({
   const [state, setState] = useState<SettingsState>({
     selectedAssets: initialAssets,
     bgmList: initialBgmList,
+    bgmShuffle: initialBgmShuffle,
     menus: initialMenus,
     menuLayout:           initialLayout               ?? {},
     menuLayoutMobile:     initialLayoutMobile         ?? {},
@@ -776,6 +823,7 @@ export function UniverseSettings({
       const update: Record<string, any> = {
         "universe.selectedAssets": state.selectedAssets,
         "universe.bgmList": state.bgmList,
+        "universe.bgmShuffle": state.bgmShuffle,
         "universe.menus": state.menus,
         "universe.color": state.color,
       };
@@ -847,7 +895,9 @@ export function UniverseSettings({
             <BgmTab
               personalId={personalId}
               bgmList={state.bgmList}
+              bgmShuffle={state.bgmShuffle}
               onChange={(bgmList) => setState((p) => ({ ...p, bgmList }))}
+              onShuffleChange={(v) => setState((p) => ({ ...p, bgmShuffle: v }))}
               bgmPlaying={bgmPlaying}
               onToggleBgm={onToggleBgm}
             />

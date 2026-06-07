@@ -102,6 +102,7 @@ export default async function PersonalPage({ params }: Props) {
       personalId: p.id,
       selectedAssets: p.universe.selectedAssets,
       bgmList,
+      bgmShuffle: p.universe.bgmShuffle,
       menuLayout: p.universe.menuLayout,
       menuLayoutMobile: p.universe.menuLayoutMobile,
       assetPositions: p.universe.assetPositions,
