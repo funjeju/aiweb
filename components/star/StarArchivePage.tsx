@@ -1,18 +1,28 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Globe, Loader2 } from "lucide-react";
+import { ChevronLeft, Globe, Loader2, ExternalLink, Languages } from "lucide-react";
 import type { StarArchiveData } from "@/lib/data/star-archive";
 import { getPublicStarComments } from "@/lib/firebase/starComments";
 import type { StarComment } from "@/lib/firebase/starComments";
 import { BRIGHT_STARS } from "@/lib/universe/stars";
 import { cn } from "@/lib/utils";
 
+/* 국기 이모지 (ISO 3166-1 alpha-2 → emoji) */
+function countryFlag(code?: string): string {
+  if (!code || code.length !== 2) return "";
+  return code.toUpperCase().replace(/./g, (c) =>
+    String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))
+  );
+}
+
 type Lang = "en" | "ko";
 
 export function StarArchivePage({ star }: { star: StarArchiveData }) {
   const [lang, setLang] = useState<Lang>("en");
+  const router = useRouter();
 
   return (
     <div className="min-h-screen bg-[#05060f] text-white">
@@ -36,10 +46,11 @@ export function StarArchivePage({ star }: { star: StarArchiveData }) {
       <div className="relative z-10 max-w-2xl mx-auto px-5 py-10">
         {/* 상단 내비 */}
         <div className="flex items-center justify-between mb-10">
-          <Link href="/" className="flex items-center gap-1.5 text-white/40 hover:text-white transition-colors text-sm">
+          <button onClick={() => router.back()}
+            className="flex items-center gap-1.5 text-white/40 hover:text-white transition-colors text-sm">
             <ChevronLeft size={16} />
-            <span>Universe</span>
-          </Link>
+            <span>돌아가기</span>
+          </button>
           {/* 언어 토글 */}
           <button
             onClick={() => setLang((l) => l === "en" ? "ko" : "en")}
@@ -187,13 +198,90 @@ function StarStories({ slug, lang }: { slug: string; lang: Lang }) {
   return (
     <div className="space-y-3">
       {comments.map((c) => (
-        <div key={c.id} className="rounded-xl bg-white/5 border border-white/8 px-4 py-3">
-          <p className="text-sm text-white/70 leading-relaxed">"{c.text}"</p>
-          <p className="text-[10px] text-white/25 mt-1.5">
-            {c.authorName} · {new Date(c.createdAt).toLocaleDateString(lang === "ko" ? "ko-KR" : "en-US", { year: "numeric", month: "short", day: "numeric" })}
-          </p>
-        </div>
+        <StoryCard key={c.id} comment={c} lang={lang} />
       ))}
+    </div>
+  );
+}
+
+function StoryCard({ comment: c, lang }: { comment: StarComment; lang: Lang }) {
+  const [translated, setTranslated] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
+
+  const toggleTranslate = async () => {
+    if (translated && !showOriginal) { setShowOriginal(true); return; }
+    if (translated && showOriginal) { setShowOriginal(false); return; }
+    setTranslating(true);
+    try {
+      const target = lang === "en" ? "en" : "ko";
+      const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${target}&dt=t&q=${encodeURIComponent(c.text)}`);
+      const data = await res.json();
+      const text = (data[0] as [string][]).map(([t]) => t).join("");
+      setTranslated(text);
+      setShowOriginal(false);
+    } catch { /* 무시 */ }
+    finally { setTranslating(false); }
+  };
+
+  const flag = countryFlag(c.authorNationality);
+  const slugBase = typeof window !== "undefined" ? window.location.origin : "";
+  const profileUrl = c.authorPublicSlug
+    ? `${slugBase}/p/${c.authorPublicSlug}`
+    : null;
+
+  const timeAgo = (() => {
+    const diff = Date.now() - new Date(c.createdAt).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return lang === "en" ? "just now" : "방금";
+    if (m < 60) return lang === "en" ? `${m}m ago` : `${m}분 전`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return lang === "en" ? `${h}h ago` : `${h}시간 전`;
+    const d = Math.floor(h / 24);
+    if (d < 30) return lang === "en" ? `${d}d ago` : `${d}일 전`;
+    return new Date(c.createdAt).toLocaleDateString(lang === "ko" ? "ko-KR" : "en-US", { month: "short", day: "numeric" });
+  })();
+
+  return (
+    <div className="rounded-2xl bg-white/5 border border-white/8 px-4 py-4 space-y-2.5">
+      {/* 작성자 행 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* 닉네임 */}
+        <span className="text-xs font-semibold text-white/80">{c.authorName}</span>
+
+        {/* 국기 */}
+        {flag && <span className="text-sm leading-none">{flag}</span>}
+
+        {/* 별자리 링크 */}
+        {profileUrl && (
+          <a href={profileUrl} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-0.5 text-[10px] text-violet-400/70 hover:text-violet-400 transition-colors">
+            <ExternalLink size={9} />
+            <span>별자리 보기</span>
+          </a>
+        )}
+
+        {/* 시간 */}
+        <span className="ml-auto text-[10px] text-white/25">{timeAgo}</span>
+      </div>
+
+      {/* 코멘트 본문 */}
+      <p className="text-sm text-white/70 leading-relaxed">
+        {translated && !showOriginal ? translated : c.text}
+      </p>
+
+      {/* 번역 버튼 */}
+      <button onClick={toggleTranslate} disabled={translating}
+        className="flex items-center gap-1 text-[10px] text-white/25 hover:text-white/50 transition-colors">
+        {translating
+          ? <Loader2 size={9} className="animate-spin" />
+          : <Languages size={9} />}
+        {translating
+          ? (lang === "en" ? "Translating…" : "번역 중…")
+          : translated
+            ? showOriginal ? (lang === "en" ? "Show translation" : "번역 보기") : (lang === "en" ? "Show original" : "원문 보기")
+            : (lang === "en" ? "Translate" : "번역")}
+      </button>
     </div>
   );
 }

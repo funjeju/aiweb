@@ -9,6 +9,8 @@ export interface StarComment {
   authorId: string;
   authorName: string;
   authorPersonalId?: string;
+  authorPublicSlug?: string;  // /p/[slug] or publicSlug 링크용
+  authorNationality?: string; // ISO 3166-1 alpha-2, e.g. "KR"
   text: string;
   isPublic: boolean;
   createdAt: string;

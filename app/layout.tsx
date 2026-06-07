@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
+import { GlobalBgmPlayer } from "@/components/GlobalBgmPlayer";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://aiweb-xi-one.vercel.app"),
@@ -39,7 +40,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="antialiased">
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+          <GlobalBgmPlayer />
+          {children}
+        </AuthProvider>
         </body>
     </html>
   );

@@ -983,6 +983,8 @@ function StarComments({ starName, currentUser, isOwner }: {
   const [friendPersonalIds, setFriendPersonalIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const [viewerMeta, setViewerMeta] = useState<{ publicSlug?: string; nationality?: string } | undefined>();
+
   // 뷰어 본인의 personalId + 친구(저장한 별자리) personalId 목록 로드
   useEffect(() => {
     if (!currentUser) return;
@@ -992,6 +994,7 @@ function StarComments({ starName, currentUser, isOwner }: {
       const myPage = pages.find((p) => p.universe);
       if (!myPage) return;
       setViewerPersonalId(myPage.id);
+      setViewerMeta({ publicSlug: myPage.publicSlug ?? myPage.id, nationality: (myPage as unknown as Record<string,string>).nationality });
       const saved = myPage.universe?.savedConstellations ?? [];
       setFriendPersonalIds(saved.map((s) => s.id));
     }).catch(() => {});
@@ -1026,6 +1029,8 @@ function StarComments({ starName, currentUser, isOwner }: {
       text: text.trim(),
       isPublic,
       ...(viewerPersonalId && { authorPersonalId: viewerPersonalId }),
+      ...(viewerMeta?.publicSlug && { authorPublicSlug: viewerMeta.publicSlug }),
+      ...(viewerMeta?.nationality && { authorNationality: viewerMeta.nationality }),
     };
     setPosting(true);
     try {
