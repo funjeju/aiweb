@@ -88,7 +88,7 @@ function countryFlag(code: string): string {
 
 const ZONE_BUFFER = 900;    // 존 사이 버퍼 (블랙홀 공간)
 const ZONE_MIN   = 2400;    // 존 최소 크기
-const ZONE_PER   = 600;     // 유저 1명당 추가 크기
+const CELL_SPACING = 800;   // 존 내 그리드 셀 크기 (겹침 방지)
 
 export interface BlackHole {
   id: string;
@@ -106,7 +106,7 @@ function computeZoneLayout(universes: UniverseItem[]): {
   virtualW: number;
   virtualH: number;
 } {
-  // 국가별 그룹화
+  // 국가별 그룹화 (country 없으면 "??")
   const groups = new Map<string, UniverseItem[]>();
   for (const u of universes) {
     const c = u.country ?? "??";
@@ -117,25 +117,30 @@ function computeZoneLayout(universes: UniverseItem[]): {
   // 유저 수 내림차순 정렬
   const sorted = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
 
-  // 존 크기 계산
-  const zoneSizes = sorted.map(([code, members]) => ({
-    code,
-    members,
-    w: Math.max(ZONE_MIN, members.length * ZONE_PER),
-    h: Math.max(ZONE_MIN, Math.ceil(members.length * 0.7) * ZONE_PER),
-  }));
+  // 각 존의 그리드 셀 수 계산 (정사각형에 가깝게)
+  const zoneSizes = sorted.map(([code, members]) => {
+    // ID 기준 정렬 → 항상 동일한 순서 보장
+    const ms = [...members].sort((a, b) => a.id.localeCompare(b.id));
+    const gridCols = Math.max(1, Math.ceil(Math.sqrt(ms.length * 1.4)));
+    const gridRows = Math.ceil(ms.length / gridCols);
+    // 셀 크기(CELL_SPACING)로 존 크기 결정, ZONE_MIN 보장
+    const w = Math.max(ZONE_MIN, gridCols * CELL_SPACING);
+    const h = Math.max(ZONE_MIN, gridRows * CELL_SPACING);
+    return { code, members: ms, gridCols, gridRows, w, h };
+  });
 
   // 존 배치: 2열 그리드
   const COLS = 2;
   const zones = new Map<string, ZoneRect>();
+  const zoneGrids = new Map<string, { cols: number; rows: number; members: UniverseItem[] }>();
   let curX = 0, curY = 0, rowH = 0;
-  zoneSizes.forEach(({ code, w, h }, i) => {
+  zoneSizes.forEach(({ code, members, gridCols, gridRows, w, h }, i) => {
     const col = i % COLS;
     if (col === 0 && i > 0) { curY += rowH + ZONE_BUFFER; curX = 0; rowH = 0; }
     zones.set(code, { x: curX, y: curY, w, h });
+    zoneGrids.set(code, { cols: gridCols, rows: gridRows, members });
     curX += w + ZONE_BUFFER;
     rowH = Math.max(rowH, h);
-    if (col === COLS - 1 || i === zoneSizes.length - 1) { /* row done */ }
   });
 
   // 전체 가상 공간 크기
@@ -144,16 +149,22 @@ function computeZoneLayout(universes: UniverseItem[]): {
   const virtualW = maxX + ZONE_BUFFER;
   const virtualH = maxY + ZONE_BUFFER;
 
-  // 별자리 위치 (존 내부에 랜덤 배치)
+  // 별자리 위치: 그리드 셀 기반 배치 (겹침 방지)
+  // 각 유저는 정렬된 인덱스에 따라 고정 셀을 배정받고, 셀 내에서 ID 해시로 미세 지터
   const positions = new Map<string, { cx: number; cy: number }>();
-  for (const [code, members] of groups) {
-    const zone = zones.get(code);
-    if (!zone) continue;
-    members.forEach((u) => {
+  for (const [code, zone] of zones) {
+    const grid = zoneGrids.get(code);
+    if (!grid) continue;
+    const cellW = zone.w / grid.cols;
+    const cellH = zone.h / grid.rows;
+    grid.members.forEach((u, idx) => {
+      const gc = idx % grid.cols;
+      const gr = Math.floor(idx / grid.cols);
       const rng = mulberry32(hashString(u.id));
+      // 셀 내 20%~80% 구간에 배치 (가장자리 여백 확보)
       positions.set(u.id, {
-        cx: zone.x + zone.w * (0.1 + rng() * 0.8),
-        cy: zone.y + zone.h * (0.1 + rng() * 0.8),
+        cx: zone.x + gc * cellW + cellW * (0.2 + rng() * 0.6),
+        cy: zone.y + gr * cellH + cellH * (0.2 + rng() * 0.6),
       });
     });
   }
@@ -165,9 +176,7 @@ function computeZoneLayout(universes: UniverseItem[]): {
     for (let j = i + 1; j < zoneList.length; j++) {
       const [codeA, zA] = zoneList[i];
       const [codeB, zB] = zoneList[j];
-      // 수평 인접
       const hAdj = Math.abs((zA.x + zA.w) - zB.x) < ZONE_BUFFER * 1.5 || Math.abs((zB.x + zB.w) - zA.x) < ZONE_BUFFER * 1.5;
-      // 수직 인접
       const vAdj = Math.abs((zA.y + zA.h) - zB.y) < ZONE_BUFFER * 1.5 || Math.abs((zB.y + zB.h) - zA.y) < ZONE_BUFFER * 1.5;
       if (!hAdj && !vAdj) continue;
       blackHoles.push({
