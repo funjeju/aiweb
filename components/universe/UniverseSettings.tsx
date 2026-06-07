@@ -1,18 +1,18 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { updatePersonal, saveCustomAssets } from "@/lib/firebase/personals";
+import { updatePersonal, saveCustomAssets, saveCountry } from "@/lib/firebase/personals";
 import { uploadPersonalAudio, uploadPersonalImage, uploadPersonalAsset } from "@/lib/firebase/storage";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
 import type { UniverseAsset } from "@/lib/types/asset";
 import type { UniverseIconType } from "@/lib/types/personal";
 import {
   X, Loader2, Check, Music, Layers, LayoutGrid, Move,
-  Upload, Play, Pause, Trash2, Volume2, Smile, Palette,
+  Upload, Play, Pause, Trash2, Volume2, Smile, Palette, Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Tab = "assets" | "bgm" | "menus" | "layout" | "color";
+type Tab = "assets" | "bgm" | "menus" | "layout" | "color" | "nation";
 
 interface MenuNode { id: string; label: string; icon: UniverseIconType; customIcon?: string; }
 
@@ -757,6 +757,110 @@ function AssetsTab({
   );
 }
 
+/* ─── 주요 국가 목록 ─── */
+const COUNTRIES = [
+  { code: "KR", name: "대한민국" }, { code: "US", name: "미국" },
+  { code: "JP", name: "일본" }, { code: "CN", name: "중국" },
+  { code: "GB", name: "영국" }, { code: "DE", name: "독일" },
+  { code: "FR", name: "프랑스" }, { code: "CA", name: "캐나다" },
+  { code: "AU", name: "호주" }, { code: "BR", name: "브라질" },
+  { code: "IN", name: "인도" }, { code: "SG", name: "싱가포르" },
+  { code: "TH", name: "태국" }, { code: "VN", name: "베트남" },
+  { code: "TW", name: "대만" }, { code: "HK", name: "홍콩" },
+  { code: "MX", name: "멕시코" }, { code: "ES", name: "스페인" },
+  { code: "IT", name: "이탈리아" }, { code: "NL", name: "네덜란드" },
+  { code: "SE", name: "스웨덴" }, { code: "NO", name: "노르웨이" },
+  { code: "NZ", name: "뉴질랜드" }, { code: "PT", name: "포르투갈" },
+];
+
+function countryFlag(code: string): string {
+  if (!code || code.length !== 2) return "🌐";
+  return code.toUpperCase().replace(/./g, (c) =>
+    String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))
+  );
+}
+
+function NationTab({ personalId, currentCountry, countryChangedAt, isAdmin, onChanged }: {
+  personalId: string;
+  currentCountry?: string;
+  countryChangedAt?: string;
+  isAdmin: boolean;
+  onChanged: (code: string, changedAt: string) => void;
+}) {
+  const [selected, setSelected] = useState(currentCountry ?? "");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+
+  // 한 달 내 변경 여부 확인
+  const canChange = isAdmin || (() => {
+    if (!countryChangedAt) return true;
+    const last = new Date(countryChangedAt).getTime();
+    return Date.now() - last > 30 * 24 * 60 * 60 * 1000;
+  })();
+
+  const daysUntilNext = (() => {
+    if (!countryChangedAt || canChange) return 0;
+    const last = new Date(countryChangedAt).getTime();
+    const remain = 30 * 24 * 60 * 60 * 1000 - (Date.now() - last);
+    return Math.ceil(remain / (24 * 60 * 60 * 1000));
+  })();
+
+  const handleSave = async () => {
+    if (!selected || selected === currentCountry || !canChange) return;
+    setSaving(true);
+    try {
+      const now = new Date().toISOString();
+      await saveCountry(personalId, selected, now);
+      onChanged(selected, now);
+      setDone(true);
+      setTimeout(() => setDone(false), 2000);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-4 py-2">
+      <p className="text-white/40 text-xs leading-relaxed">
+        국적은 우주 탐험 화면에서 별자리가 배치되는 구역을 결정합니다.
+        {isAdmin
+          ? " (어드민: 제한 없음)"
+          : " 무료 변경은 월 1회입니다."}
+      </p>
+
+      {!canChange && (
+        <div className="rounded-xl bg-amber-500/10 border border-amber-400/20 px-4 py-3 text-xs text-amber-300">
+          다음 변경까지 {daysUntilNext}일 남았습니다.
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-2">
+        {COUNTRIES.map((c) => (
+          <button key={c.code}
+            disabled={!canChange}
+            onClick={() => setSelected(c.code)}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs transition-all",
+              selected === c.code
+                ? "border-violet-400 bg-violet-500/20 text-white font-semibold"
+                : "border-white/10 bg-white/5 text-white/50 hover:border-white/25 hover:text-white/80",
+              !canChange && "opacity-40 cursor-not-allowed",
+            )}>
+            <span className="text-base leading-none">{countryFlag(c.code)}</span>
+            <span className="truncate">{c.name}</span>
+          </button>
+        ))}
+      </div>
+
+      <button
+        onClick={handleSave}
+        disabled={!selected || selected === currentCountry || !canChange || saving}
+        className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-30"
+        style={{ backgroundColor: "#7c3aed" }}>
+        {saving ? <Loader2 size={14} className="animate-spin mx-auto" /> : done ? "✓ 저장됨" : "저장"}
+      </button>
+    </div>
+  );
+}
+
 /* ─── 메인 설정 패널 ─────────────────────────── */
 
 export function UniverseSettings({
@@ -777,6 +881,9 @@ export function UniverseSettings({
   onToggleBgm,
   onClose,
   onSaved,
+  currentCountry,
+  countryChangedAt,
+  isAdmin = false,
 }: {
   personalId: string;
   menus: MenuNode[];
@@ -795,8 +902,15 @@ export function UniverseSettings({
   onClose: () => void;
   onSaved: (state: SettingsState) => void;
   initialColor?: string;
+  currentCountry?: string;
+  countryChangedAt?: string;
+  isAdmin?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("assets");
+  const [nation, setNation] = useState<{ country?: string; changedAt?: string }>({
+    country: currentCountry,
+    changedAt: countryChangedAt,
+  });
   const [saving, setSaving] = useState(false);
   const [state, setState] = useState<SettingsState>({
     selectedAssets: initialAssets,
@@ -854,6 +968,7 @@ export function UniverseSettings({
     { id: "menus",   label: "메뉴",   icon: <LayoutGrid size={14} /> },
     { id: "layout",  label: "레이아웃", icon: <Move size={14} /> },
     { id: "color",   label: "별자리색", icon: <Palette size={14} /> },
+    { id: "nation",  label: "국적",   icon: <Globe size={14} /> },
   ];
 
   return (
@@ -958,10 +1073,19 @@ export function UniverseSettings({
               </div>
             </div>
           )}
+          {tab === "nation" && (
+            <NationTab
+              personalId={personalId}
+              currentCountry={nation.country}
+              countryChangedAt={nation.changedAt}
+              isAdmin={isAdmin ?? false}
+              onChanged={(code, changedAt) => setNation({ country: code, changedAt })}
+            />
+          )}
         </div>
 
-        {/* 저장 버튼 */}
-        <div className="px-5 py-4 border-t border-white/10 shrink-0">
+        {/* 저장 버튼 — nation 탭에서는 숨김 (자체 저장 버튼 있음) */}
+        <div className={cn("px-5 py-4 border-t border-white/10 shrink-0", tab === "nation" && "hidden")}>
           <button onClick={save} disabled={saving}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-violet-500 text-white font-bold hover:bg-violet-600 disabled:opacity-50 transition-colors">
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}

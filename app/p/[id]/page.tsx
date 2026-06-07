@@ -110,6 +110,9 @@ export default async function PersonalPage({ params }: Props) {
       customAssets: p.universe.customAssets,
       starArchive: p.starArchive,
       favorites: p.universe.favorites,
+      country: p.country,
+      countryChangedAt: p.countryChangedAt,
+      isAdmin: p.profile?.role === "admin",
     };
 
     return (

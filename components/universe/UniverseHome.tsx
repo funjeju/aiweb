@@ -73,6 +73,9 @@ export interface UniverseData {
   publicUrl?: string;
   ownerId?: string;
   personalId?: string;
+  country?: string;
+  countryChangedAt?: string;
+  isAdmin?: boolean;
 }
 
 const ICON: Record<UniverseIconType, React.ReactNode> = {
@@ -1944,6 +1947,9 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           onToggleBgm={toggleBgm}
           onClose={() => setShowSettings(false)}
           initialColor={data.color}
+          currentCountry={data.country}
+          countryChangedAt={data.countryChangedAt}
+          isAdmin={data.isAdmin}
           onSaved={(s) => {
             handleSettingsSaved(s);
             if (s.color !== data.color) setData((prev) => ({ ...prev, color: s.color }));

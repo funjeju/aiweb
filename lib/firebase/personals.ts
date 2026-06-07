@@ -119,8 +119,12 @@ export async function saveFavorites(
   });
 }
 
-export async function saveCountry(personalId: string, country: string): Promise<void> {
-  await updateDoc(doc(db, COLLECTION, personalId), { country, updatedAt: serverTimestamp() });
+export async function saveCountry(personalId: string, country: string, changedAt?: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, personalId), {
+    country,
+    ...(changedAt && { countryChangedAt: changedAt }),
+    updatedAt: serverTimestamp(),
+  });
 }
 
 /** 전체 개인 페이지 조회 (어드민 전용) */
