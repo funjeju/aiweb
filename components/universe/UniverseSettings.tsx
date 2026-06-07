@@ -235,8 +235,11 @@ function LayoutTab({
     const key = draggingId.current;
     if (!key || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const top  = Math.min(94, Math.max(4, ((e.clientY - rect.top)  / rect.height) * 100)).toFixed(1) + "%";
-    const left = Math.min(94, Math.max(4, ((e.clientX - rect.left) / rect.width)  * 100)).toFixed(1) + "%";
+    const rawTop  = ((e.clientY - rect.top)  / rect.height) * 100;
+    const rawLeft = ((e.clientX - rect.left) / rect.width)  * 100;
+    // 상단 네비게이션(~14%) · 하단 버튼(~84%) 영역 침범 방지
+    const top  = Math.min(82, Math.max(16, rawTop )).toFixed(1) + "%";
+    const left = Math.min(92, Math.max(8,  rawLeft)).toFixed(1) + "%";
     if (key.startsWith("menu:")) {
       setActiveLayout({ ...activeLayout, [key.slice(5)]: { top, left } });
     } else if (key.startsWith("asset:")) {
@@ -295,7 +298,11 @@ function LayoutTab({
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white/20 text-xs text-center pointer-events-none">
           ✦ 별자리
         </div>
-        {/* 하단 버튼 영역 표시 (겹침 방지 가이드) */}
+        {/* 상단 네비게이션 영역 표시 */}
+        <div className="absolute top-0 left-0 right-0 h-[16%] border-b border-dashed border-white/15 pointer-events-none flex items-center justify-center">
+          <span className="text-[8px] text-white/20">상단 메뉴 영역</span>
+        </div>
+        {/* 하단 버튼 영역 표시 */}
         <div className="absolute bottom-0 left-0 right-0 h-[18%] border-t border-dashed border-white/15 pointer-events-none flex items-center justify-center">
           <span className="text-[8px] text-white/20">하단 메뉴 영역</span>
         </div>

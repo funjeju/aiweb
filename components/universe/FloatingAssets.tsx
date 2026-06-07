@@ -51,8 +51,8 @@ export function FloatingAssets({
       const custom = customPositions[id];
       return [{
         asset,
-        top: custom?.top ?? `${8 + rng() * 58}%`,
-        left: custom?.left ?? `${8 + rng() * 78}%`,
+        top: custom?.top ?? `${18 + rng() * 58}%`,
+        left: custom?.left ?? `${10 + rng() * 78}%`,
         size: 28 + Math.floor(rng() * 20),
         duration: 4 + rng() * 6,
         delay: rng() * 4,

@@ -1560,7 +1560,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
               <Settings size={13} />{ui.settings}
             </button>
             <button
-              onClick={() => logout()}
+              onClick={() => logout().then(() => { window.location.href = "/"; })}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/40 text-xs font-medium hover:bg-red-500/20 hover:text-red-300 hover:border-red-400/30 transition-colors">
               <LogOut size={13} />로그아웃
             </button>
