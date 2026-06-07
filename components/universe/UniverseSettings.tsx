@@ -7,12 +7,12 @@ import { DEFAULT_ASSETS } from "@/lib/types/asset";
 import type { UniverseAsset } from "@/lib/types/asset";
 import type { UniverseIconType } from "@/lib/types/personal";
 import {
-  X, Loader2, Check, Music, Layers, LayoutGrid,
+  X, Loader2, Check, Music, Layers, LayoutGrid, Move,
   Upload, Play, Pause, Trash2, Volume2, Smile, Palette,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Tab = "assets" | "bgm" | "layout" | "color";
+type Tab = "assets" | "bgm" | "menus" | "layout" | "color";
 
 interface MenuNode { id: string; label: string; icon: UniverseIconType; customIcon?: string; }
 
@@ -851,7 +851,8 @@ export function UniverseSettings({
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "assets",  label: "에셋",   icon: <Layers size={14} /> },
     { id: "bgm",     label: "BGM",    icon: <Music size={14} /> },
-    { id: "layout",  label: "레이아웃", icon: <LayoutGrid size={14} /> },
+    { id: "menus",   label: "메뉴",   icon: <LayoutGrid size={14} /> },
+    { id: "layout",  label: "레이아웃", icon: <Move size={14} /> },
     { id: "color",   label: "별자리색", icon: <Palette size={14} /> },
   ];
 
@@ -868,10 +869,10 @@ export function UniverseSettings({
         </div>
 
         {/* 탭 */}
-        <div className="flex gap-1 mx-5 mb-4 p-1 bg-white/5 rounded-xl shrink-0">
+        <div className="flex gap-1 mx-5 mb-4 p-1 bg-white/5 rounded-xl shrink-0 overflow-x-auto no-scrollbar">
           {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className={cn("flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors",
+              className={cn("shrink-0 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap",
                 tab === t.id ? "bg-violet-500 text-white" : "text-white/40 hover:text-white/70")}>
               {t.icon}{t.label}
             </button>
@@ -900,6 +901,13 @@ export function UniverseSettings({
               onShuffleChange={(v) => setState((p) => ({ ...p, bgmShuffle: v }))}
               bgmPlaying={bgmPlaying}
               onToggleBgm={onToggleBgm}
+            />
+          )}
+          {tab === "menus" && (
+            <MenuIconEditor
+              menus={state.menus}
+              personalId={personalId}
+              onChange={(menus) => setState((p) => ({ ...p, menus }))}
             />
           )}
           {tab === "layout" && (

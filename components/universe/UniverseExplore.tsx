@@ -355,6 +355,44 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     }
   }, []);
 
+  /* ── 앰비언트 펄스 이벤트 ─────────────────────── */
+  interface PulseEvent {
+    nodeId: string;       // 대상 별자리 id
+    starIdx: number | -1; // -1 = 별자리 전체, ≥0 = 특정 별 하나
+    startTime: number;
+    duration: number;     // ms
+    peak: number;         // 최대 추가 밝기 (0~1)
+  }
+  const pulseEventsRef = useRef<PulseEvent[]>([]);
+  const lastPulseScheduleRef = useRef(0);
+
+  const schedulePulse = useCallback((now: number, nodeList: typeof nodes) => {
+    if (nodeList.length === 0) return;
+    // 5~14초 간격으로 새 이벤트
+    const interval = 5000 + Math.random() * 9000;
+    if (now - lastPulseScheduleRef.current < interval) return;
+    lastPulseScheduleRef.current = now;
+
+    const node = nodeList[Math.floor(Math.random() * nodeList.length)];
+    const kind = Math.random();
+    const starIdx = kind < 0.4
+      ? -1  // 40%: 별자리 전체 글로우
+      : Math.floor(Math.random() * node.constellation.stars.length); // 60%: 별 하나
+
+    pulseEventsRef.current.push({
+      nodeId: node.item.id,
+      starIdx,
+      startTime: now,
+      duration: starIdx === -1 ? 2200 + Math.random() * 1200 : 900 + Math.random() * 600,
+      peak: starIdx === -1 ? 0.35 + Math.random() * 0.3 : 0.7 + Math.random() * 0.3,
+    });
+
+    // 만료된 이벤트 정리
+    pulseEventsRef.current = pulseEventsRef.current.filter(
+      (e) => now - e.startTime < e.duration + 200
+    );
+  }, [nodes]);
+
   /* RAF 렌더 */
   const animRef = useRef(0);
   const render = useCallback(() => {
@@ -491,6 +529,9 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     }
     ctx.globalAlpha = 1;
 
+    /* 앰비언트 펄스 스케줄 */
+    schedulePulse(t, nodes);
+
     /* 별자리 렌더 */
     const cellZoomed = CELL * zoom;
     // 도착 글로우: arriving 페이즈에서 목적지 별자리 강조
@@ -506,6 +547,23 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       const isArriving = arrivingGlow > 0 && node.item.id === warp?.targetNodeId;
       const pulse = 0.88 + 0.12 * Math.sin(t * 0.0014 + node.cx * 0.0007);
       const baseAlpha = isHovered ? 1 : 0.72;
+
+      // 앰비언트 펄스 강도 계산
+      const activePulses = pulseEventsRef.current.filter((e) => e.nodeId === node.item.id);
+      let ambientBoost = 0;        // 별자리 전체용
+      const starBoosts: number[] = node.constellation.stars.map(() => 0);
+      for (const ev of activePulses) {
+        const progress = (t - ev.startTime) / ev.duration;
+        if (progress < 0 || progress > 1) continue;
+        // ease in-out: 올라갔다 내려오는 종 모양
+        const bell = Math.sin(progress * Math.PI);
+        const boost = ev.peak * bell;
+        if (ev.starIdx === -1) {
+          ambientBoost = Math.max(ambientBoost, boost);
+        } else {
+          starBoosts[ev.starIdx] = Math.max(starBoosts[ev.starIdx], boost);
+        }
+      }
 
       // 도착 글로우 — 큰 원형 빛 번짐
       if (isArriving) {
@@ -536,9 +594,11 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
 
       const c = node.constellation;
 
-      ctx.globalAlpha = baseAlpha * 0.38 * pulse;
+      // 연결선 — 전체 펄스 반영
+      const lineAlpha = Math.min(1, baseAlpha * (0.38 + ambientBoost * 0.55) * pulse);
+      ctx.globalAlpha = lineAlpha;
       ctx.strokeStyle = node.item.color;
-      ctx.lineWidth = isHovered ? 1.3 : 1;
+      ctx.lineWidth = isHovered ? 1.3 : ambientBoost > 0.1 ? 1 + ambientBoost * 0.8 : 1;
       for (const [a, b] of c.links) {
         const ax = px + (c.stars[a].x - 0.5) * cellZoomed;
         const ay = py + (c.stars[a].y - 0.5) * cellZoomed;
@@ -547,20 +607,34 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
         ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
       }
 
-      for (const s of c.stars) {
+      for (let si = 0; si < c.stars.length; si++) {
+        const s = c.stars[si];
         const spx = px + (s.x - 0.5) * cellZoomed;
         const spy = py + (s.y - 0.5) * cellZoomed;
-        const r = s.size * 1.4 * Math.max(0.5, zoom);
+        const starBoost = Math.max(ambientBoost * 0.6, starBoosts[si]);
+        const r = s.size * 1.4 * Math.max(0.5, zoom) * (1 + starBoost * 0.7);
 
+        // 글로우
         const g = ctx.createRadialGradient(spx, spy, 0, spx, spy, r * 5);
         g.addColorStop(0, node.item.color);
         g.addColorStop(0.4, `${node.item.color}66`);
         g.addColorStop(1, "transparent");
         ctx.fillStyle = g;
-        ctx.globalAlpha = baseAlpha * 0.38 * pulse;
+        ctx.globalAlpha = Math.min(1, baseAlpha * (0.38 + starBoost * 0.7) * pulse);
         ctx.beginPath(); ctx.arc(spx, spy, r * 5, 0, Math.PI * 2); ctx.fill();
 
-        ctx.globalAlpha = baseAlpha * pulse;
+        // 핀포인트 글레어 (개별 별 강조 시)
+        if (starBoost > 0.2) {
+          const glare = ctx.createRadialGradient(spx, spy, 0, spx, spy, r * 2.5);
+          glare.addColorStop(0, `rgba(255,255,255,${starBoost * 0.85})`);
+          glare.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = glare;
+          ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(spx, spy, r * 2.5, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // 별 코어
+        ctx.globalAlpha = Math.min(1, baseAlpha * pulse + starBoost * 0.4);
         ctx.fillStyle = "#ffffff";
         ctx.beginPath(); ctx.arc(spx, spy, r * 0.85, 0, Math.PI * 2); ctx.fill();
       }
