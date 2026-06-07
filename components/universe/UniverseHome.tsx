@@ -1559,7 +1559,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         lineStyle={style.lineStyle ?? "flow"}
         starGlow={style.starGlow ?? "default"}
         shootingStarIntervalMs={(data.shootingStarIntervalSec ?? 10) * 1000}
-        knownSlugs={!isOwner && user ? myArchive : []}
+        knownSlugs={user ? myArchive : []}
         onStarClick={(star) => {
           if (!openMenu && !showNeighbors && !showSettings) setClickedStar(star);
         }}
@@ -1719,8 +1719,8 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           onClick={handleNeighborClick}>
           <Sparkles size={13} />{ui.neighbor}
         </button>
-        {/* 별 도감 버튼 — 로그인 + 비소유자 */}
-        {user && !isOwner && (
+        {/* 별 도감 버튼 — 로그인 유저 전체 */}
+        {user && (
           <button
             onClick={() => setShowArchiveDrawer(true)}
             className="relative flex items-center justify-center w-9 h-9 rounded-full backdrop-blur-sm border transition-colors hover:bg-white/10"
@@ -1801,19 +1801,20 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         const isArchived = myArchive.includes(starSlug);
 
         const handleAddToArchive = async () => {
-          if (!user || !data.personalId) return;
-          // 내 personalId 필요 — 뷰어 자신의 personalId를 가져와야 함
-          // viewer의 personalId는 별도 조회 필요 (추후 개선: authStore에 personalId 보관)
-          // 임시: 로컬 state만 업데이트하고 Firestore는 personalId 조회 후 저장
+          if (!user) return;
           setArchivingSlug(starSlug);
           try {
-            const { getPersonalsByOwner: getPO } = await import("@/lib/firebase/personals");
-            const pages = await getPO(user.uid);
-            const myPage = pages[0];
-            if (myPage) {
-              await addStarToArchive(myPage.id, starSlug);
-              setMyArchive((prev) => [...prev, starSlug]);
+            // 오너는 자신의 personalId를 바로 사용
+            if (isOwner && data.personalId) {
+              await addStarToArchive(data.personalId, starSlug);
+            } else {
+              // 비오너: 뷰어 자신의 personalId 조회
+              const { getPersonalsByOwner: getPO } = await import("@/lib/firebase/personals");
+              const pages = await getPO(user.uid);
+              const myPage = pages[0];
+              if (myPage) await addStarToArchive(myPage.id, starSlug);
             }
+            setMyArchive((prev) => [...prev, starSlug]);
           } finally {
             setArchivingSlug(null);
           }
@@ -1858,7 +1859,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
               <p className="text-white/70 text-sm leading-relaxed mb-4">{lore.desc}</p>
 
               {/* 별 도감 등록 버튼 */}
-              {user && !isOwner && (
+              {user && (
                 <div className="flex items-center gap-2 mb-4">
                   {isArchived ? (
                     <span className="flex items-center gap-1.5 text-xs text-violet-400/70 px-3 py-1.5 rounded-full border border-violet-400/20 bg-violet-500/10">
