@@ -26,6 +26,7 @@ async function getPublishedUniverses(): Promise<UniverseItem[]> {
           constellationSeed: data.universe?.constellationSeed as number | undefined,
           tagline: data.profile?.tagline as string | undefined,
           role: data.profile?.role as string | undefined,
+          country: data.country as string | undefined,
         };
       });
   } catch {

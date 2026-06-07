@@ -88,6 +88,8 @@ export interface PersonalSchema {
   published: boolean;
   createdAt: string;
   updatedAt: string;
+  /** ISO 3166-1 alpha-2 국가 코드 (IP 자동 감지) e.g. "KR", "US" */
+  country?: string;
 
   personaType: PersonaType;
   themeId: ThemeId;

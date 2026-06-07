@@ -24,6 +24,7 @@ export interface UniverseItem {
   constellationSeed?: number;
   tagline?: string;
   role?: string;
+  country?: string;
 }
 
 interface UniverseNode {
@@ -75,28 +76,111 @@ function getVirtualSize(n: number) {
   };
 }
 
-/* ─── 유니버스 위치 계산 ─────────────────────────── */
+/* ─── 국기 이모지 ─────────────────────────────── */
+function countryFlag(code: string): string {
+  if (!code || code.length !== 2 || code === "??") return "🌐";
+  return code.toUpperCase().replace(/./g, (c) =>
+    String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))
+  );
+}
 
-function computePositions(universes: UniverseItem[]): Map<string, { cx: number; cy: number }> {
-  const n = universes.length;
-  const { W, H } = getVirtualSize(n);
-  const cols = Math.ceil(Math.sqrt(n * 1.4));
-  const rows = Math.ceil(n / cols);
-  const cellW = W / cols;
-  const cellH = H / rows;
+/* ─── 국가별 존 + 블랙홀 위치 계산 ──────────────── */
 
-  const sorted = [...universes].sort((a, b) => (hashString(a.id) >>> 0) - (hashString(b.id) >>> 0));
-  const result = new Map<string, { cx: number; cy: number }>();
-  sorted.forEach((u, idx) => {
-    const col = idx % cols;
-    const row = Math.floor(idx / cols);
-    const rng = mulberry32(hashString(u.id));
-    result.set(u.id, {
-      cx: cellW * col + cellW * (0.18 + rng() * 0.64),
-      cy: cellH * row + cellH * (0.18 + rng() * 0.64),
-    });
+const ZONE_BUFFER = 900;    // 존 사이 버퍼 (블랙홀 공간)
+const ZONE_MIN   = 2400;    // 존 최소 크기
+const ZONE_PER   = 600;     // 유저 1명당 추가 크기
+
+export interface BlackHole {
+  id: string;
+  x: number;
+  y: number;
+  zoneA: string; // 국가코드
+  zoneB: string;
+}
+
+interface ZoneRect { x: number; y: number; w: number; h: number; }
+
+function computeZoneLayout(universes: UniverseItem[]): {
+  positions: Map<string, { cx: number; cy: number }>;
+  blackHoles: BlackHole[];
+  virtualW: number;
+  virtualH: number;
+} {
+  // 국가별 그룹화
+  const groups = new Map<string, UniverseItem[]>();
+  for (const u of universes) {
+    const c = u.country ?? "??";
+    if (!groups.has(c)) groups.set(c, []);
+    groups.get(c)!.push(u);
+  }
+
+  // 유저 수 내림차순 정렬
+  const sorted = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
+
+  // 존 크기 계산
+  const zoneSizes = sorted.map(([code, members]) => ({
+    code,
+    members,
+    w: Math.max(ZONE_MIN, members.length * ZONE_PER),
+    h: Math.max(ZONE_MIN, Math.ceil(members.length * 0.7) * ZONE_PER),
+  }));
+
+  // 존 배치: 2열 그리드
+  const COLS = 2;
+  const zones = new Map<string, ZoneRect>();
+  let curX = 0, curY = 0, rowH = 0;
+  zoneSizes.forEach(({ code, w, h }, i) => {
+    const col = i % COLS;
+    if (col === 0 && i > 0) { curY += rowH + ZONE_BUFFER; curX = 0; rowH = 0; }
+    zones.set(code, { x: curX, y: curY, w, h });
+    curX += w + ZONE_BUFFER;
+    rowH = Math.max(rowH, h);
+    if (col === COLS - 1 || i === zoneSizes.length - 1) { /* row done */ }
   });
-  return result;
+
+  // 전체 가상 공간 크기
+  let maxX = 0, maxY = 0;
+  zones.forEach((z) => { maxX = Math.max(maxX, z.x + z.w); maxY = Math.max(maxY, z.y + z.h); });
+  const virtualW = maxX + ZONE_BUFFER;
+  const virtualH = maxY + ZONE_BUFFER;
+
+  // 별자리 위치 (존 내부에 랜덤 배치)
+  const positions = new Map<string, { cx: number; cy: number }>();
+  for (const [code, members] of groups) {
+    const zone = zones.get(code);
+    if (!zone) continue;
+    members.forEach((u) => {
+      const rng = mulberry32(hashString(u.id));
+      positions.set(u.id, {
+        cx: zone.x + zone.w * (0.1 + rng() * 0.8),
+        cy: zone.y + zone.h * (0.1 + rng() * 0.8),
+      });
+    });
+  }
+
+  // 블랙홀: 인접 존 쌍의 경계 중간
+  const blackHoles: BlackHole[] = [];
+  const zoneList = [...zones.entries()];
+  for (let i = 0; i < zoneList.length; i++) {
+    for (let j = i + 1; j < zoneList.length; j++) {
+      const [codeA, zA] = zoneList[i];
+      const [codeB, zB] = zoneList[j];
+      // 수평 인접
+      const hAdj = Math.abs((zA.x + zA.w) - zB.x) < ZONE_BUFFER * 1.5 || Math.abs((zB.x + zB.w) - zA.x) < ZONE_BUFFER * 1.5;
+      // 수직 인접
+      const vAdj = Math.abs((zA.y + zA.h) - zB.y) < ZONE_BUFFER * 1.5 || Math.abs((zB.y + zB.h) - zA.y) < ZONE_BUFFER * 1.5;
+      if (!hAdj && !vAdj) continue;
+      blackHoles.push({
+        id: `bh-${codeA}-${codeB}`,
+        x: (zA.x + zA.w / 2 + zB.x + zB.w / 2) / 2,
+        y: (zA.y + zA.h / 2 + zB.y + zB.h / 2) / 2,
+        zoneA: codeA,
+        zoneB: codeB,
+      });
+    }
+  }
+
+  return { positions, blackHoles, virtualW, virtualH };
 }
 
 /* ─── 워프 효과음 (Web Audio API) ───────────────── */
@@ -218,7 +302,9 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
     }).catch(() => {});
   }, [user]);
 
-  const { W: VIRTUAL_W, H: VIRTUAL_H } = useMemo(() => getVirtualSize(universes.length), [universes.length]);
+  const zoneLayout = useMemo(() => computeZoneLayout(universes), [universes]);
+  const VIRTUAL_W = zoneLayout.virtualW;
+  const VIRTUAL_H = zoneLayout.virtualH;
 
   /* 카메라 */
   const camRef = useRef({ x: VIRTUAL_W / 2, y: VIRTUAL_H / 2 });
@@ -301,15 +387,16 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
 
   /* 노드 */
   const nodes = useMemo<UniverseNode[]>(() => {
-    const posMap = computePositions(universes);
     return universes.map((item) => {
       const constellation = item.constellationSeed != null
         ? generateConstellationFromSeed(item.constellationSeed, item.color)
         : generateConstellation(item.name, item.color, item.favoriteNumber);
-      const pos = posMap.get(item.id)!;
+      const pos = zoneLayout.positions.get(item.id) ?? { cx: 0, cy: 0 };
       return { item, constellation, cx: pos.cx, cy: pos.cy };
     });
-  }, [universes]);
+  }, [universes, zoneLayout]);
+
+  const blackHoles = zoneLayout.blackHoles;
 
   /* 초기 카메라: 신규 방문자는 랜덤 스팟 */
   useEffect(() => {
@@ -671,8 +758,79 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       ctx.globalAlpha = 1;
     }
 
+    /* ── 블랙홀 렌더 ── */
+    for (const bh of blackHoles) {
+      const bx = sx(bh.x), by = sy(bh.y);
+      if (bx < -300 || bx > W + 300 || by < -300 || by > H + 300) continue;
+
+      const pulse = 0.85 + 0.15 * Math.sin(t * 0.0008 + bh.x * 0.0003);
+      const R = Math.max(28, 40 * zoom);
+
+      // 외곽 헤일로 (넓게 퍼지는 보라빛)
+      const halo = ctx.createRadialGradient(bx, by, R * 1.2, bx, by, R * 5.5);
+      halo.addColorStop(0, `rgba(120,60,220,${0.13 * pulse})`);
+      halo.addColorStop(0.5, `rgba(80,20,180,${0.06 * pulse})`);
+      halo.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = halo; ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(bx, by, R * 5.5, 0, Math.PI * 2); ctx.fill();
+
+      // 강착원반 — 기울어진 타원 고리 (도플러: 왼쪽 밝음)
+      const diskRings = [
+        { rx: R * 2.6, ry: R * 0.65, alpha: 0.55 * pulse, colorL: "#e8c070", colorR: "#7040c0" },
+        { rx: R * 1.9, ry: R * 0.48, alpha: 0.70 * pulse, colorL: "#ffdb88", colorR: "#5030a0" },
+      ];
+      for (const dr of diskRings) {
+        ctx.save();
+        ctx.translate(bx, by);
+        const diskGrad = ctx.createLinearGradient(-dr.rx, 0, dr.rx, 0);
+        diskGrad.addColorStop(0,   dr.colorL + "dd");
+        diskGrad.addColorStop(0.5, "rgba(255,200,80,0.15)");
+        diskGrad.addColorStop(1,   dr.colorR + "88");
+        ctx.strokeStyle = diskGrad;
+        ctx.lineWidth = dr.ry * 0.6;
+        ctx.globalAlpha = dr.alpha;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, dr.rx, dr.ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 광자구 (photon sphere) — 얇은 흰 링
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.strokeStyle = `rgba(255,255,255,${0.22 * pulse})`;
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(0, 0, R * 1.28, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+
+      // 사건의 지평선 (완전한 검정)
+      const evGlow = ctx.createRadialGradient(bx, by, R * 0.3, bx, by, R * 1.1);
+      evGlow.addColorStop(0, "rgba(0,0,0,1)");
+      evGlow.addColorStop(0.7, "rgba(5,0,15,1)");
+      evGlow.addColorStop(1, "rgba(30,0,60,0.6)");
+      ctx.fillStyle = evGlow; ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.arc(bx, by, R * 1.1, 0, Math.PI * 2); ctx.fill();
+
+      // 국가 방향 가이드 (줌이 충분할 때)
+      if (zoom > 0.45) {
+        const flagA = countryFlag(bh.zoneA);
+        const flagB = countryFlag(bh.zoneB);
+        ctx.font = `${Math.round(13 * zoom)}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.globalAlpha = 0.55 * pulse;
+        ctx.fillStyle = "#c8b8f8";
+        ctx.shadowColor = "rgba(0,0,0,0.9)";
+        ctx.shadowBlur = 6;
+        ctx.fillText(`${flagA} ${bh.zoneA}`, bx, by - R * 2.2);
+        ctx.fillText(`${flagB} ${bh.zoneB}`, bx, by + R * 2.2 + 14 * zoom);
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
+    }
+
     animRef.current = requestAnimationFrame(render);
-  }, [nodes]);
+  }, [nodes, blackHoles]);
 
   useEffect(() => {
     animRef.current = requestAnimationFrame(render);
@@ -702,6 +860,22 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       return best;
     };
 
+    const hitTestBlackHole = (clientX: number, clientY: number): BlackHole | null => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = clientX - rect.left;
+      const my = clientY - rect.top;
+      const W = canvas.clientWidth, H = canvas.clientHeight;
+      const { x, y } = camRef.current;
+      const zoom = zoomRef.current;
+      const R = Math.max(28, 40 * zoom) * 1.5;
+      for (const bh of blackHoles) {
+        const bx = (bh.x - x) * zoom + W / 2;
+        const by = (bh.y - y) * zoom + H / 2;
+        if (Math.sqrt((mx - bx) ** 2 + (my - by) ** 2) < R) return bh;
+      }
+      return null;
+    };
+
     /* 마우스 드래그 */
     const onDown = (e: MouseEvent) => {
       if (e.button !== 0) return;
@@ -725,7 +899,8 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
         const id = hitTest(e.clientX, e.clientY);
         hoveredRef.current = id;
         setHoveredId(id);
-        canvas.style.cursor = id ? "pointer" : "grab";
+        const bh = !id ? hitTestBlackHole(e.clientX, e.clientY) : null;
+        canvas.style.cursor = (id || bh) ? "pointer" : "grab";
       }
     };
 
@@ -734,7 +909,22 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
       dragging.current = false;
       const id = hitTest(e.clientX, e.clientY);
       canvas.style.cursor = id ? "pointer" : "grab";
-      if (!moved.current && id) router.push(`/p/${id}`);
+      if (!moved.current && id) { router.push(`/p/${id}`); return; }
+      if (!moved.current) {
+        const bh = hitTestBlackHole(e.clientX, e.clientY);
+        if (bh) {
+          // 인접 존 중 하나를 랜덤 선택해서 그 존의 랜덤 별자리로 워프
+          const targetZone = Math.random() < 0.5 ? bh.zoneA : bh.zoneB;
+          const candidates = universes.filter((u) => (u.country ?? "??") === targetZone);
+          const target = candidates.length > 0
+            ? candidates[Math.floor(Math.random() * candidates.length)]
+            : universes[Math.floor(Math.random() * universes.length)];
+          if (target) {
+            const pos = zoneLayout.positions.get(target.id);
+            if (pos) startWarp(pos.cx, pos.cy, target.id);
+          }
+        }
+      }
     };
 
     /* 마우스 휠 줌 */

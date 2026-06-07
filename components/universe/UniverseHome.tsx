@@ -991,12 +991,27 @@ function StarComments({ starName, currentUser, isOwner }: {
   useEffect(() => {
     if (!currentUser) return;
     let cancelled = false;
-    getPersonalsByOwner(currentUser.uid).then((pages) => {
+    getPersonalsByOwner(currentUser.uid).then(async (pages) => {
       if (cancelled) return;
       const myPage = pages.find((p) => p.universe);
       if (!myPage) return;
       setViewerPersonalId(myPage.id);
-      setViewerMeta({ publicSlug: myPage.publicSlug ?? myPage.id, nationality: (myPage as unknown as Record<string,string>).nationality });
+
+      // country 없으면 IP 기반 자동 감지 후 저장
+      let country = myPage.country;
+      if (!country) {
+        try {
+          const res = await fetch("/api/geo");
+          const json = await res.json();
+          country = json.country as string;
+          if (country) {
+            const { saveCountry } = await import("@/lib/firebase/personals");
+            await saveCountry(myPage.id, country);
+          }
+        } catch { /* 무시 */ }
+      }
+
+      setViewerMeta({ publicSlug: myPage.publicSlug ?? myPage.id, nationality: country });
       const saved = myPage.universe?.savedConstellations ?? [];
       setFriendPersonalIds(saved.map((s) => s.id));
     }).catch(() => {});
