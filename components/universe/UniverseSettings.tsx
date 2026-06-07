@@ -295,6 +295,10 @@ function LayoutTab({
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white/20 text-xs text-center pointer-events-none">
           ✦ 별자리
         </div>
+        {/* 하단 버튼 영역 표시 (겹침 방지 가이드) */}
+        <div className="absolute bottom-0 left-0 right-0 h-[18%] border-t border-dashed border-white/15 pointer-events-none flex items-center justify-center">
+          <span className="text-[8px] text-white/20">하단 메뉴 영역</span>
+        </div>
 
         {/* 메뉴 노드 */}
         {menus.slice(0, 6).map((menu, i) => {

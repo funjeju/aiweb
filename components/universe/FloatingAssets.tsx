@@ -51,8 +51,8 @@ export function FloatingAssets({
       const custom = customPositions[id];
       return [{
         asset,
-        top: custom?.top ?? `${10 + rng() * 75}%`,
-        left: custom?.left ?? `${5 + rng() * 85}%`,
+        top: custom?.top ?? `${8 + rng() * 58}%`,
+        left: custom?.left ?? `${8 + rng() * 78}%`,
         size: 28 + Math.floor(rng() * 20),
         duration: 4 + rng() * 6,
         delay: rng() * 4,
@@ -91,7 +91,7 @@ export function FloatingAssets({
           return (
             <div
               key={`${p.asset.id}-${i}`}
-              className="absolute select-none"
+              className="absolute select-none -translate-x-1/2 -translate-y-1/2"
               style={{
                 top: p.top,
                 left: p.left,

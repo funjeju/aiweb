@@ -16,6 +16,7 @@ import { getStarComments, getPublicStarComments, addStarComment, deleteStarComme
 import type { StarComment } from "@/lib/firebase/starComments";
 import { uploadPersonalImage } from "@/lib/firebase/storage";
 import { useAuthStore } from "@/lib/store/authStore";
+import { logout } from "@/lib/firebase/auth";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
 import type { PersonalSchema, UniverseIconType, UniverseStyle, GalleryItem } from "@/lib/types/personal";
 import { useLang, fetchTranslations } from "@/lib/i18n/useLang";
@@ -26,7 +27,7 @@ import {
   Link2, Music, FileText, ArrowRight, Loader2,
   Github, Instagram, Linkedin, Globe, Mail,
   ChevronLeft, ChevronRight, Pencil, Plus, Check, Settings,
-  Play, Pause, LogIn, Send, Lock, MessageCircle, PenLine, Trash2,
+  Play, Pause, LogIn, LogOut, Send, Lock, MessageCircle, PenLine, Trash2,
   Calendar, Search, Volume2, Star,
 } from "lucide-react";
 import type { DiaryEntry, DiaryEmotion } from "@/lib/types/personal";
@@ -1176,13 +1177,9 @@ function LoginPrompt({ onClose }: { onClose: () => void }) {
           지금 바로 나만의 우주를 만들어보세요.
         </p>
         <div className="flex flex-col gap-2">
-          <a href="/login"
+          <a href="/login?from=/private/create/universe"
             className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-violet-500 text-white font-bold hover:bg-violet-600 transition-colors">
-            <LogIn size={16} />로그인
-          </a>
-          <a href="/signup"
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-white/10 text-white/80 font-semibold hover:bg-white/15 transition-colors">
-            회원가입 (무료)
+            <LogIn size={16} />Google로 시작하기
           </a>
           <button onClick={onClose} className="text-white/30 text-sm mt-1 hover:text-white/50">
             구경만 할게요
@@ -1557,10 +1554,17 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           </Link>
         )}
         {isOwner && (
-          <button onClick={() => setShowSettings(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white transition-colors">
-            <Settings size={13} />{ui.settings}
-          </button>
+          <>
+            <button onClick={() => setShowSettings(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/50 text-xs font-medium hover:bg-white/10 hover:text-white transition-colors">
+              <Settings size={13} />{ui.settings}
+            </button>
+            <button
+              onClick={() => logout()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/40 text-xs font-medium hover:bg-red-500/20 hover:text-red-300 hover:border-red-400/30 transition-colors">
+              <LogOut size={13} />로그아웃
+            </button>
+          </>
         )}
         {!user && (
           <a href="/login"
@@ -1628,7 +1632,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
               viewerUid={user.uid}
             />
           )}
-          <a href={user ? "/private/create/universe" : "/signup"}
+          <a href={user ? "/private/create/universe" : "/login?from=/private/create/universe"}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-full backdrop-blur-sm border border-violet-400/40 bg-violet-500/20 text-violet-300 text-xs font-medium hover:bg-violet-500/35 hover:text-white transition-colors whitespace-nowrap">
             <Sparkles size={12} />나만의 별자리 만들기
           </a>
@@ -1636,7 +1640,8 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       )}
 
       {/* 하단 액션 + BGM 플레이어 */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2">
+        {/* BGM 플레이어 — 있을 때만 */}
         {bgmList.length > 0 && (
           <BgmPlayerButton
             tracks={bgmList}
@@ -1655,12 +1660,16 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
             }}
           />
         )}
-        <button className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold text-white backdrop-blur-sm border transition-colors hover:bg-white/10"
-          style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}66` }}
-          onClick={handleNeighborClick}>
-          <Sparkles size={14} />{ui.neighbor}
-        </button>
-        <ShareButton url={data.publicUrl || (data.personalId ? `${typeof window !== "undefined" ? window.location.origin : ""}/p/${data.personalId}` : "")} color={data.color} />
+        {/* 이웃 구경 + 퍼가기 한 줄 */}
+        <div className="flex items-center gap-2">
+          <button
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold text-white backdrop-blur-sm border transition-colors hover:bg-white/10 whitespace-nowrap"
+            style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}66` }}
+            onClick={handleNeighborClick}>
+            <Sparkles size={13} />{ui.neighbor}
+          </button>
+          <ShareButton url={data.publicUrl || (data.personalId ? `${typeof window !== "undefined" ? window.location.origin : ""}/p/${data.personalId}` : "")} color={data.color} />
+        </div>
       </div>
 
       {/* 메뉴 패널 */}
