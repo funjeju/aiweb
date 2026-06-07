@@ -27,7 +27,7 @@ import {
   Link2, Music, FileText, ArrowRight, Loader2,
   Github, Instagram, Linkedin, Globe, Mail,
   ChevronLeft, ChevronRight, Pencil, Plus, Check, Settings,
-  Play, Pause, LogIn, LogOut, Send, Lock, MessageCircle, PenLine, Trash2,
+  Play, Pause, LogIn, LogOut, Share2, Send, Lock, MessageCircle, PenLine, Trash2,
   Calendar, Search, Volume2, Star,
 } from "lucide-react";
 import type { DiaryEntry, DiaryEmotion } from "@/lib/types/personal";
@@ -1273,26 +1273,26 @@ function BgmPlayerButton({ tracks, trackIdx, color, playing, onToggle, onPrev, o
           <span className="text-[10px] text-white/40 w-7 text-right tabular-nums">{Math.round(vol * 100)}%</span>
         </div>
       )}
-      <div className="flex items-center gap-1 px-2 py-1.5 rounded-full backdrop-blur-sm border text-white/70 text-xs"
+      <div className="flex items-center gap-1 px-2 py-2 rounded-full backdrop-blur-sm border text-white/70 text-xs"
         style={{ backgroundColor: `${color}15`, borderColor: `${color}40` }}>
         {tracks.length > 1 && (
           <button onClick={onPrev} className="p-0.5 hover:text-white transition-colors" title="이전 트랙">
-            <ChevronLeft size={12} />
+            <ChevronLeft size={11} />
           </button>
         )}
         <button onClick={onToggle} className="p-0.5 hover:text-white transition-colors" title={track.name}>
           {playing ? <Pause size={13} /> : <Play size={13} />}
         </button>
-        <span className="max-w-[90px] truncate mx-1">{track.name}</span>
+        <span className="w-[2.4em] truncate mx-0.5 text-[10px] leading-none">{track.name}</span>
         {tracks.length > 1 && (
           <button onClick={onNext} className="p-0.5 hover:text-white transition-colors" title="다음 트랙">
-            <ChevronRight size={12} />
+            <ChevronRight size={11} />
           </button>
         )}
         <button onClick={() => setShowVol((v) => !v)}
           className={cn("p-0.5 transition-colors", showVol ? "text-violet-400" : "hover:text-white")}
           title="볼륨">
-          <Volume2 size={12} />
+          <Volume2 size={11} />
         </button>
       </div>
     </div>
@@ -1639,9 +1639,8 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         </div>
       )}
 
-      {/* 하단 액션 + BGM 플레이어 */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2">
-        {/* BGM 플레이어 — 있을 때만 */}
+      {/* 하단 액션 — 한 줄: BGM(옵션) + 이웃구경 + 공유 */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
         {bgmList.length > 0 && (
           <BgmPlayerButton
             tracks={bgmList}
@@ -1660,16 +1659,13 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
             }}
           />
         )}
-        {/* 이웃 구경 + 퍼가기 한 줄 */}
-        <div className="flex items-center gap-2">
-          <button
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold text-white backdrop-blur-sm border transition-colors hover:bg-white/10 whitespace-nowrap"
-            style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}66` }}
-            onClick={handleNeighborClick}>
-            <Sparkles size={13} />{ui.neighbor}
-          </button>
-          <ShareButton url={data.publicUrl || (data.personalId ? `${typeof window !== "undefined" ? window.location.origin : ""}/p/${data.personalId}` : "")} color={data.color} />
-        </div>
+        <button
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold text-white backdrop-blur-sm border transition-colors hover:bg-white/10 whitespace-nowrap"
+          style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}66` }}
+          onClick={handleNeighborClick}>
+          <Sparkles size={13} />{ui.neighbor}
+        </button>
+        <ShareButton url={data.publicUrl || (data.personalId ? `${typeof window !== "undefined" ? window.location.origin : ""}/p/${data.personalId}` : "")} color={data.color} />
       </div>
 
       {/* 메뉴 패널 */}
@@ -1791,14 +1787,12 @@ function ShareButton({ url, color }: { url: string; color: string }) {
   if (!url) return null;
 
   const handleShare = async () => {
-    // 모바일: Web Share API 우선
     if (navigator.share) {
       try {
         await navigator.share({ title: "내 별자리 우주", url });
         return;
       } catch { /* 취소하면 무시 */ }
     }
-    // 데스크탑: 클립보드 복사
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -1808,11 +1802,16 @@ function ShareButton({ url, color }: { url: string; color: string }) {
   return (
     <button
       onClick={handleShare}
-      className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold text-white backdrop-blur-sm border transition-colors"
-      style={{ backgroundColor: copied ? `${color}33` : `${color}22`, borderColor: `${color}66` }}
+      title={copied ? "복사됨" : "공유하기"}
+      className="w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-sm border transition-all"
+      style={{
+        backgroundColor: copied ? `${color}33` : `${color}22`,
+        borderColor: `${color}66`,
+        color: copied ? color : "rgba(255,255,255,0.7)",
+        boxShadow: copied ? `0 0 12px ${color}44` : undefined,
+      }}
     >
-      {copied ? <Check size={15} /> : <Send size={15} />}
-      {copied ? "복사됨" : "퍼가기"}
+      {copied ? <Check size={15} /> : <Share2 size={15} />}
     </button>
   );
 }
