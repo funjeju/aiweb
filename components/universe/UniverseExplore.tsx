@@ -11,7 +11,7 @@ import type { Constellation } from "@/lib/universe/stars";
 import { useAuthStore } from "@/lib/store/authStore";
 import { getPersonalsByOwner } from "@/lib/firebase/personals";
 import { getUniverseConfig } from "@/lib/firebase/config";
-import { Sparkles, LogIn, LayoutDashboard, Plus, Minus } from "lucide-react";
+import { Sparkles, LogIn, Plus, Minus } from "lucide-react";
 
 /* ─── 타입 ─────────────────────────────────────── */
 
@@ -794,12 +794,7 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
         </Link>
 
         <div className="flex items-center gap-2 pointer-events-auto">
-          {user ? (
-            <Link href="/dashboard"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/70 text-xs font-medium hover:bg-white/10 hover:text-white transition-colors">
-              <LayoutDashboard size={13} />내 대시보드
-            </Link>
-          ) : (
+          {!user && (
             <Link href="/login?from=/private"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/15 bg-black/30 text-white/60 text-xs font-medium hover:bg-white/10 hover:text-white transition-colors">
               <LogIn size={13} />로그인

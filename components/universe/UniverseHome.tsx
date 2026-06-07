@@ -11,7 +11,7 @@ import { UniverseSettings } from "./UniverseSettings";
 import { generateConstellation, generateConstellationFromSeed } from "@/lib/universe/stars";
 import { getStarLore } from "@/lib/universe/star-lore";
 import type { ConstellationStar } from "@/lib/universe/stars";
-import { getPublishedUniverses, updatePersonal, getPersonalById, getPersonalsByOwner, getStarNeighbors } from "@/lib/firebase/personals";
+import { getPublishedUniverses, updatePersonal, getPersonalById, getPersonalsByOwner, getStarNeighbors, addStarToArchive } from "@/lib/firebase/personals";
 import { getStarComments, getPublicStarComments, addStarComment, deleteStarComment, updateStarCommentVisibility } from "@/lib/firebase/starComments";
 import type { StarComment } from "@/lib/firebase/starComments";
 import { uploadPersonalImage } from "@/lib/firebase/storage";
@@ -19,7 +19,10 @@ import { useAuthStore } from "@/lib/store/authStore";
 import { logout } from "@/lib/firebase/auth";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
 import type { UniverseAsset } from "@/lib/types/asset";
-import type { PersonalSchema, UniverseIconType, UniverseStyle, GalleryItem } from "@/lib/types/personal";
+import { nameToSlug, getStarArchive } from "@/lib/data/star-archive";
+import { StarArchiveDrawer } from "@/components/star/StarArchiveDrawer";
+import { FavoritesPanel } from "@/components/universe/FavoritesPanel";
+import type { PersonalSchema, UniverseIconType, UniverseStyle, GalleryItem, FavoriteFolder } from "@/lib/types/personal";
 import { useLang, fetchTranslations } from "@/lib/i18n/useLang";
 import { collectUniverseTexts, applyUniverseTexts } from "@/lib/i18n/translatePersonal";
 import { LangToggle } from "@/components/i18n/LangToggle";
@@ -63,6 +66,8 @@ export interface UniverseData {
   assetPositions?: Record<string, { top: string; left: string }>;
   assetPositionsMobile?: Record<string, { top: string; left: string }>;
   customAssets?: UniverseAsset[];
+  starArchive?: string[];
+  favorites?: FavoriteFolder[];
   publicUrl?: string;
   ownerId?: string;
   personalId?: string;
@@ -945,7 +950,14 @@ function MenuContent({ menu, data, isOwner, onDataUpdate }: {
       <DiaryPanel data={data} isOwner={isOwner}
         onSaved={(entries) => onDataUpdate({ diaryEntries: entries })} />
     );
-    case "link":    return <p className="text-white/50 text-sm py-4 text-center">링크 모음은 곧 추가됩니다.</p>;
+    case "link": return (
+      <FavoritesPanel
+        personalId={data.personalId ?? ""}
+        isOwner={isOwner}
+        color={data.color}
+        initialFolders={data.favorites}
+      />
+    );
     case "music":   return <p className="text-white/50 text-sm py-4 text-center">음악 공간은 곧 추가됩니다.</p>;
     case "note":    return <p className="text-white/50 text-sm py-4 text-center">메모 공간은 곧 추가됩니다.</p>;
     default: return null;
@@ -1327,6 +1339,9 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [showPrivateNotice, setShowPrivateNotice] = useState(false);
   const [clickedStar, setClickedStar] = useState<ConstellationStar | null>(null);
+  const [myArchive, setMyArchive] = useState<string[]>(initialData.starArchive ?? []);
+  const [archivingSlug, setArchivingSlug] = useState<string | null>(null);
+  const [showArchiveDrawer, setShowArchiveDrawer] = useState(false);
 
   // 로그인 없이 열람 가능한 메뉴
   const PUBLIC_MENUS: UniverseIconType[] = ["profile", "gallery"];
@@ -1531,6 +1546,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         lineStyle={style.lineStyle ?? "flow"}
         starGlow={style.starGlow ?? "default"}
         shootingStarIntervalMs={(data.shootingStarIntervalSec ?? 10) * 1000}
+        knownSlugs={!isOwner && user ? myArchive : []}
         onStarClick={(star) => {
           if (!openMenu && !showNeighbors && !showSettings) setClickedStar(star);
         }}
@@ -1601,13 +1617,27 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       </div>
 
       {/* 메뉴 노드 — 위치는 menuLayout 우선 */}
+      <style>{`
+        @keyframes mn-float {
+          0%, 100% { transform: translate(-50%, calc(-50% + 0px)); }
+          50%       { transform: translate(-50%, calc(-50% + var(--mn-amp, -4px))); }
+        }
+      `}</style>
       {(data.menus ?? []).slice(0, 6).map((menu, i) => {
         const pos = getMenuPos(menu.id, i);
         const isPublic = PUBLIC_MENUS.includes(menu.icon);
+        // 각 노드마다 다른 진폭·속도·딜레이로 자연스러운 부유감
+        const amp   = -(3 + (i % 3));           // -3 ~ -5px
+        const dur   = 7 + (i * 1.3) % 4;        // 7 ~ 11s
+        const delay = -(i * 1.7);               // 위상 분산 (음수 딜레이로 이미 진행 중인 상태)
         return (
           <button key={menu.id} onClick={() => handleMenuClick(menu)}
-            className="absolute z-20 -translate-x-1/2 -translate-y-1/2 group"
-            style={{ top: pos.top, left: pos.left }}>
+            className="absolute z-20 group"
+            style={{
+              top: pos.top, left: pos.left,
+              "--mn-amp": `${amp}px`,
+              animation: `mn-float ${dur.toFixed(1)}s ease-in-out ${delay.toFixed(1)}s infinite`,
+            } as React.CSSProperties}>
             <span className="flex flex-col items-center gap-2">
               <span className="w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-sm border transition-transform group-hover:scale-110 relative"
                 style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}88`, color: "#fff", boxShadow: `0 0 20px ${data.color}55` }}>
@@ -1676,6 +1706,21 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           onClick={handleNeighborClick}>
           <Sparkles size={13} />{ui.neighbor}
         </button>
+        {/* 별 도감 버튼 — 로그인 + 비소유자 */}
+        {user && !isOwner && (
+          <button
+            onClick={() => setShowArchiveDrawer(true)}
+            className="relative flex items-center justify-center w-9 h-9 rounded-full backdrop-blur-sm border transition-colors hover:bg-white/10"
+            style={{ backgroundColor: `${data.color}22`, borderColor: `${data.color}66` }}
+            title="내 별 도감">
+            <Star size={15} className="text-white" />
+            {myArchive.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-violet-500 text-white text-[8px] font-bold flex items-center justify-center">
+                {myArchive.length > 99 ? "99+" : myArchive.length}
+              </span>
+            )}
+          </button>
+        )}
         <ShareButton url={data.publicUrl || (data.personalId ? `${typeof window !== "undefined" ? window.location.origin : ""}/p/${data.personalId}` : "")} color={data.color} />
       </div>
 
@@ -1737,26 +1782,95 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       {/* 별 클릭 설명 모달 */}
       {clickedStar && (() => {
         const lore = getStarLore(clickedStar.star.name);
+        const starSlug = clickedStar.star.slug ?? nameToSlug(clickedStar.star.nameEn ?? clickedStar.star.name);
+        const archiveData = getStarArchive(starSlug);
+        const isNewStar = user && !isOwner && !myArchive.includes(starSlug);
+        const isArchived = myArchive.includes(starSlug);
+
+        const handleAddToArchive = async () => {
+          if (!user || !data.personalId) return;
+          // 내 personalId 필요 — 뷰어 자신의 personalId를 가져와야 함
+          // viewer의 personalId는 별도 조회 필요 (추후 개선: authStore에 personalId 보관)
+          // 임시: 로컬 state만 업데이트하고 Firestore는 personalId 조회 후 저장
+          setArchivingSlug(starSlug);
+          try {
+            const { getPersonalsByOwner: getPO } = await import("@/lib/firebase/personals");
+            const pages = await getPO(user.uid);
+            const myPage = pages[0];
+            if (myPage) {
+              await addStarToArchive(myPage.id, starSlug);
+              setMyArchive((prev) => [...prev, starSlug]);
+            }
+          } finally {
+            setArchivingSlug(null);
+          }
+        };
+
         return (
           <div className="absolute inset-0 z-30 flex items-end sm:items-center justify-center"
             onClick={() => setClickedStar(null)}>
             <div className="w-full sm:max-w-sm mx-auto bg-black/50 backdrop-blur-xl border border-white/10 rounded-t-3xl sm:rounded-3xl p-7 m-0 sm:m-4 max-h-[80vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}>
-              {/* 별 아이콘 + 밝기 */}
+              {/* 새 별 발견 배너 */}
+              {isNewStar && (
+                <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-2xl bg-violet-500/20 border border-violet-400/30">
+                  <span className="text-lg">✨</span>
+                  <p className="text-xs text-violet-300 font-semibold">새로운 별을 발견했습니다!</p>
+                </div>
+              )}
+
+              {/* 별 아이콘 + 이름 */}
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
+                <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 relative"
                   style={{ backgroundColor: `${data.color}22`, boxShadow: `0 0 24px ${data.color}66` }}>
                   <span className="text-white text-xl">✦</span>
+                  {isNewStar && (
+                    <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-violet-400 animate-ping" />
+                  )}
                 </div>
                 <div>
-                  <p className="text-white font-bold text-base">{clickedStar.star.name}</p>
-                  <p className="text-white/40 text-xs">등급 {clickedStar.star.mag.toFixed(2)} · {lore.title}</p>
+                  <p className="text-white font-bold text-base">
+                    {clickedStar.star.nameEn ?? clickedStar.star.name}
+                  </p>
+                  {clickedStar.star.nameKo && clickedStar.star.nameKo !== clickedStar.star.nameEn && (
+                    <p className="text-white/40 text-xs">{clickedStar.star.nameKo}</p>
+                  )}
+                  <p className="text-white/30 text-xs">등급 {clickedStar.star.mag.toFixed(2)} · {lore.title}</p>
                 </div>
                 <button onClick={() => setClickedStar(null)} className="ml-auto text-white/30 hover:text-white">
                   <X size={18} />
                 </button>
               </div>
-              <p className="text-white/70 text-sm leading-relaxed">{lore.desc}</p>
+
+              <p className="text-white/70 text-sm leading-relaxed mb-4">{lore.desc}</p>
+
+              {/* 별 도감 등록 버튼 */}
+              {user && !isOwner && (
+                <div className="flex items-center gap-2 mb-4">
+                  {isArchived ? (
+                    <span className="flex items-center gap-1.5 text-xs text-violet-400/70 px-3 py-1.5 rounded-full border border-violet-400/20 bg-violet-500/10">
+                      <Check size={11} /> 도감에 등록됨
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleAddToArchive}
+                      disabled={archivingSlug === starSlug}
+                      className="flex items-center gap-1.5 text-xs text-white px-3 py-1.5 rounded-full bg-violet-500 hover:bg-violet-600 transition-colors disabled:opacity-60">
+                      {archivingSlug === starSlug
+                        ? <Loader2 size={11} className="animate-spin" />
+                        : <Star size={11} />}
+                      내 별 도감에 추가
+                    </button>
+                  )}
+                  {archiveData && (
+                    <Link href={`/star/${starSlug}`}
+                      className="text-xs text-white/40 hover:text-violet-400 transition-colors px-3 py-1.5 rounded-full border border-white/10 hover:border-violet-400/30">
+                      별 아카이브 →
+                    </Link>
+                  )}
+                </div>
+              )}
+
               <StarNeighbors starName={clickedStar.star.name} excludeId={data.personalId} color={data.color} />
               <StarComments starName={clickedStar.star.name} currentUser={user} isOwner={isOwner} />
             </div>
@@ -1786,6 +1900,15 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
             handleSettingsSaved(s);
             if (s.color !== data.color) setData((prev) => ({ ...prev, color: s.color }));
           }}
+        />
+      )}
+
+      {/* 별 도감 드로어 */}
+      {showArchiveDrawer && (
+        <StarArchiveDrawer
+          slugs={myArchive}
+          color={data.color}
+          onClose={() => setShowArchiveDrawer(false)}
         />
       )}
     </div>

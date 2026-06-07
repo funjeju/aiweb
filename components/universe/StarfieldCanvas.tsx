@@ -22,11 +22,13 @@ export function StarfieldCanvas({
   constellation, showLabels = true,
   skyTheme = "deep-space", lineStyle = "flow", starGlow = "default",
   shootingStarIntervalMs = 10000,
+  knownSlugs = [],
   onStarClick,
 }: {
   constellation: Constellation;
   showLabels?: boolean;
   shootingStarIntervalMs?: number;
+  knownSlugs?: string[];
   onStarClick?: (star: import("@/lib/universe/stars").ConstellationStar) => void;
 } & StyleProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -260,20 +262,32 @@ export function StarfieldCanvas({
 
       // 별자리 별
       for (const s of cs) {
-        const px = s.x * w, py = s.y * h;
+        // 별마다 독립된 위상으로 ±2~3px 미세 부유
+        const floatPhase = s.x * 17.3 + s.y * 11.7;
+        const floatY = 2.5 * Math.sin(t * 0.00055 + floatPhase);
+        const floatX = 1.5 * Math.cos(t * 0.00042 + floatPhase * 1.3);
+        const px = s.x * w + floatX, py = s.y * h + floatY;
         const tw = 0.7 + 0.3 * Math.sin(t * 0.0018 + px * 0.02);
         const r = s.size * 1.5;
         const glowR = r * 6;
+
+        // 처음 보는 별 여부 — knownSlugs에 없으면 미발견 (보라 대신 황금빛)
+        const starSlug = s.star.slug ?? s.star.name.toLowerCase().replace(/\s+/g, "-");
+        const isNew = knownSlugs.length > 0 && !knownSlugs.includes(starSlug);
+        const starColor = isNew ? "#ffd700" : color;
+        // 미발견 별은 더 강하게 깜박임
+        const newPulse = isNew ? 0.5 + 0.5 * Math.abs(Math.sin(t * 0.003 + floatPhase)) : 1;
+
         const g = ctx.createRadialGradient(px, py, 0, px, py, glowR);
         g.addColorStop(0, "#ffffff");
-        g.addColorStop(0.25, color);
-        g.addColorStop(0.6, `${color}55`);
+        g.addColorStop(0.25, starColor);
+        g.addColorStop(0.6, `${starColor}55`);
         g.addColorStop(1, "transparent");
         ctx.fillStyle = g;
-        ctx.globalAlpha = 0.55 * tw * glowMult;
+        ctx.globalAlpha = 0.55 * tw * glowMult * newPulse;
         ctx.beginPath(); ctx.arc(px, py, glowR, 0, Math.PI * 2); ctx.fill();
 
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = newPulse;
         ctx.fillStyle = "#ffffff";
         ctx.beginPath(); ctx.arc(px, py, r * 0.9, 0, Math.PI * 2); ctx.fill();
 
@@ -302,7 +316,7 @@ export function StarfieldCanvas({
       clearInterval(shootTimer);
       clearTimeout(firstShot);
     };
-  }, [constellation, showLabels, skyTheme, lineStyle, starGlow, shootingStarIntervalMs]);
+  }, [constellation, showLabels, skyTheme, lineStyle, starGlow, shootingStarIntervalMs, knownSlugs]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!onStarClick) return;

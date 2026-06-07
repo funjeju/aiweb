@@ -1,7 +1,7 @@
 import {
   doc, getDoc, setDoc, updateDoc, deleteDoc,
   collection, query, where, getDocs, serverTimestamp, limit,
-  arrayUnion,
+  arrayUnion, arrayRemove,
 } from "firebase/firestore";
 import { db } from "./client";
 import type { PersonalSchema } from "@/lib/types/personal";
@@ -82,6 +82,22 @@ export async function getStarNeighbors(
   return users.slice(0, count);
 }
 
+/** 별 도감에 별 추가 (중복 방지는 arrayUnion이 처리) */
+export async function addStarToArchive(personalId: string, slug: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, personalId), {
+    "starArchive": arrayUnion(slug),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** 별 도감에서 별 제거 */
+export async function removeStarFromArchive(personalId: string, slug: string): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, personalId), {
+    "starArchive": arrayRemove(slug),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 /** 커스텀 에셋 배열을 Firestore에 저장 */
 export async function saveCustomAssets(
   personalId: string,
@@ -89,6 +105,16 @@ export async function saveCustomAssets(
 ): Promise<void> {
   await updateDoc(doc(db, COLLECTION, personalId), {
     "universe.customAssets": assets,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function saveFavorites(
+  personalId: string,
+  folders: import("@/lib/types/personal").FavoriteFolder[],
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, personalId), {
+    "universe.favorites": folders,
     updatedAt: serverTimestamp(),
   });
 }

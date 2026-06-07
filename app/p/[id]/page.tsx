@@ -107,6 +107,8 @@ export default async function PersonalPage({ params }: Props) {
       assetPositions: p.universe.assetPositions,
       assetPositionsMobile: p.universe.assetPositionsMobile,
       customAssets: p.universe.customAssets,
+      starArchive: p.starArchive,
+      favorites: p.universe.favorites,
     };
 
     return (

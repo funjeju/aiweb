@@ -28,11 +28,13 @@ Step 1: Based on the IP address, determine the approximate country/region (city-
 Step 2: For that latitude, list 30 to 40 real circumpolar stars that are visible year-round (stars that never set below the horizon). A star is circumpolar if its declination > (latitude - 90°).
 
 Return ONLY a valid JSON array. No explanation, no markdown, no code block.
-Format: [{"name":"Polaris","ra":37.9,"dec":89.3,"mag":1.98},...]
+Format: [{"name":"Polaris","nameEn":"Polaris","nameKo":"폴라리스","slug":"polaris","ra":37.9,"dec":89.3,"mag":1.98},...]
 
 Rules:
 - Only include stars with magnitude < 4.0
-- Use the star's Korean name if well-known (e.g. 폴라리스, 두브헤), otherwise use common English name
+- ALWAYS use the official English name for "name" and "nameEn" fields (never Korean)
+- For "nameKo" provide the Korean transliteration
+- For "slug" use lowercase English with hyphens (e.g. "kaus-australis")
 - Strictly ensure all stars satisfy the circumpolar condition for the detected latitude
 - Return between 30 and 40 stars`;
 

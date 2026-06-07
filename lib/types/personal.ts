@@ -25,6 +25,25 @@ export type PersonalSection = "hero" | "about" | "skills" | "projects" | "contac
 
 export type UniverseIconType = "profile" | "diary" | "gallery" | "link" | "music" | "note";
 
+export type FavoriteFolderType = "youtube" | "web" | "book" | "music" | "film" | "game" | "other";
+
+export interface FavoriteItem {
+  id: string;
+  title: string;
+  url?: string;         // optional — books/films may not have a URL
+  description?: string;
+  createdAt: string;
+}
+
+export interface FavoriteFolder {
+  id: string;
+  name: string;
+  type: FavoriteFolderType;
+  emoji?: string;       // custom emoji override
+  items: FavoriteItem[];
+  createdAt: string;
+}
+
 export interface GalleryItem {
   url: string;
   caption?: string; // AI 생성 감성 캡션
@@ -140,7 +159,11 @@ export interface PersonalSchema {
     assetPositionsMobile?: Record<string, { top: string; left: string }>;
     /** 개인 업로드 커스텀 에셋 (PNG/WebP/GIF/SVG) */
     customAssets?: import("@/lib/types/asset").UniverseAsset[];
+    /** 마이 페이보릿 — 폴더별 링크/아이템 컬렉션 */
+    favorites?: FavoriteFolder[];
   };
+  /** 발견한 별 slug 목록 (별 도감) */
+  starArchive?: string[];
 }
 
 export interface PersonaTypeDef {
