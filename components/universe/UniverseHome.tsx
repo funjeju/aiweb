@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -951,6 +951,8 @@ function MenuContent({ menu, data, isOwner, onDataUpdate }: {
 
 /* ─── 별 방명록 ─────────────────────────────────── */
 
+type CommentFilter = "all" | "mine" | "friends";
+
 function StarComments({ starName, currentUser, isOwner }: {
   starName: string;
   currentUser: { uid: string; displayName?: string | null; email?: string | null } | null;
@@ -960,21 +962,55 @@ function StarComments({ starName, currentUser, isOwner }: {
   const [text, setText] = useState("");
   const [posting, setPosting] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+  const [filter, setFilter] = useState<CommentFilter>("all");
+  const [viewerPersonalId, setViewerPersonalId] = useState<string | undefined>();
+  const [friendPersonalIds, setFriendPersonalIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 뷰어 본인의 personalId + 친구(저장한 별자리) personalId 목록 로드
+  useEffect(() => {
+    if (!currentUser) return;
+    let cancelled = false;
+    getPersonalsByOwner(currentUser.uid).then((pages) => {
+      if (cancelled) return;
+      const myPage = pages.find((p) => p.universe);
+      if (!myPage) return;
+      setViewerPersonalId(myPage.id);
+      const saved = myPage.universe?.savedConstellations ?? [];
+      setFriendPersonalIds(saved.map((s) => s.id));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentUser]);
 
   useEffect(() => {
     let cancelled = false;
     setComments(null);
-    // 내 스페이스: 전체 댓글 / 타인 스페이스: 공개 댓글만
     const fetch = isOwner ? getStarComments(starName) : getPublicStarComments(starName);
     fetch.then((c) => { if (!cancelled) setComments(c); }).catch(() => setComments([]));
     return () => { cancelled = true; };
   }, [starName, isOwner]);
 
+  const filteredComments = useMemo(() => {
+    if (!comments) return null;
+    if (filter === "mine" && currentUser) {
+      return comments.filter((c) => c.authorId === currentUser.uid);
+    }
+    if (filter === "friends") {
+      return comments.filter((c) => c.authorPersonalId && friendPersonalIds.includes(c.authorPersonalId));
+    }
+    return comments;
+  }, [comments, filter, currentUser, friendPersonalIds]);
+
   const post = async () => {
     if (!currentUser || !text.trim() || posting) return;
     const authorName = currentUser.displayName || currentUser.email?.split("@")[0] || "익명";
-    const payload = { authorId: currentUser.uid, authorName, text: text.trim(), isPublic };
+    const payload: Omit<StarComment, "id" | "createdAt"> = {
+      authorId: currentUser.uid,
+      authorName,
+      text: text.trim(),
+      isPublic,
+      ...(viewerPersonalId && { authorPersonalId: viewerPersonalId }),
+    };
     setPosting(true);
     try {
       const id = await addStarComment(starName, payload);
@@ -996,24 +1032,54 @@ function StarComments({ starName, currentUser, isOwner }: {
     setComments((prev) => prev?.map((c) => c.id === commentId ? { ...c, isPublic: !current } : c) ?? null);
   };
 
-  const publicCount = comments?.filter((c) => c.isPublic).length ?? 0;
+  const totalCount = comments?.length ?? 0;
+  const displayedCount = filteredComments?.length ?? 0;
+
+  const filterTabs: Array<{ key: CommentFilter; label: string }> = [
+    { key: "all", label: "모두" },
+    { key: "mine", label: "나만" },
+    { key: "friends", label: "친구" },
+  ];
 
   return (
     <div className="mt-5 pt-4 border-t border-white/10">
-      <p className="text-[11px] text-white/35 mb-3 flex items-center gap-1.5">
-        <MessageCircle size={11} />이 별을 공유하는 사람들의 이야기
-        {comments !== null && <span>({isOwner ? comments.length : publicCount})</span>}
-      </p>
+      {/* 헤더 + 필터 탭 */}
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[11px] text-white/35 flex items-center gap-1.5">
+          <MessageCircle size={11} />이 별의 이야기
+          {comments !== null && <span>({displayedCount}{filter !== "all" && `/${totalCount}`})</span>}
+        </p>
+        {currentUser && (
+          <div className="flex items-center gap-0.5 p-0.5 bg-white/5 rounded-full border border-white/10">
+            {filterTabs.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={cn(
+                  "px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors",
+                  filter === key
+                    ? "bg-violet-500 text-white"
+                    : "text-white/35 hover:text-white/60"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* 댓글 목록 */}
       <div className="space-y-2.5 max-h-44 overflow-y-auto mb-3 pr-1">
-        {comments === null && (
+        {filteredComments === null && (
           <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-white/25" /></div>
         )}
-        {comments?.length === 0 && (
-          <p className="text-xs text-white/25 text-center py-3">첫 번째 이야기를 남겨보세요 ✨</p>
+        {filteredComments !== null && filteredComments.length === 0 && (
+          <p className="text-xs text-white/25 text-center py-3">
+            {filter === "mine" ? "내가 남긴 이야기가 없어요." : filter === "friends" ? "친구들의 이야기가 없어요." : "첫 번째 이야기를 남겨보세요 ✨"}
+          </p>
         )}
-        {comments?.map((c) => (
+        {filteredComments?.map((c) => (
           <div key={c.id} className="flex items-start gap-2 group">
             <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-[10px] font-bold text-white/60 mt-0.5">
               {c.authorName[0]}
@@ -1024,8 +1090,8 @@ function StarComments({ starName, currentUser, isOwner }: {
                 <span className="text-[9px] text-white/20">
                   {new Date(c.createdAt).toLocaleDateString("ko", { month: "short", day: "numeric" })}
                 </span>
-                {/* 공개 여부 뱃지 — 내 스페이스에서만 표시 */}
-                {isOwner && currentUser?.uid === c.authorId && (
+                {/* 내 글: 공개/비공개 토글 뱃지 */}
+                {currentUser?.uid === c.authorId && (
                   <button
                     onClick={() => toggleVisibility(c.id, c.isPublic)}
                     className={cn("text-[9px] px-1.5 py-0.5 rounded-full border transition-colors",
@@ -1035,6 +1101,14 @@ function StarComments({ starName, currentUser, isOwner }: {
                     )}>
                     {c.isPublic ? "공개" : "비공개"}
                   </button>
+                )}
+                {/* 소유자 뷰: 타인 글의 공개 여부 표시 (읽기 전용) */}
+                {isOwner && currentUser?.uid !== c.authorId && (
+                  <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full border",
+                    c.isPublic ? "border-violet-400/30 text-violet-400/60" : "border-white/10 text-white/20"
+                  )}>
+                    {c.isPublic ? "공개" : "비공개"}
+                  </span>
                 )}
               </div>
               <p className="text-xs text-white/75 leading-relaxed break-words">{c.text}</p>
