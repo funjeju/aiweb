@@ -16,6 +16,7 @@ import { getStarComments, getPublicStarComments, addStarComment, deleteStarComme
 import type { StarComment } from "@/lib/firebase/starComments";
 import { uploadPersonalImage } from "@/lib/firebase/storage";
 import { useAuthStore } from "@/lib/store/authStore";
+import { useBgmStore } from "@/lib/store/bgmStore";
 import { logout } from "@/lib/firebase/auth";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
 import type { UniverseAsset } from "@/lib/types/asset";
@@ -1374,6 +1375,14 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
 
   const { user } = useAuthStore();
 
+  // ── 글로벌 BGM: 방문 시 일시정지, 퇴장 시 복귀 ──
+  useEffect(() => {
+    const store = useBgmStore.getState();
+    if (store.isPlaying && store.mode === "mine") store.pauseForVisit(true);
+    return () => { useBgmStore.getState().resumeAfterVisit(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── BGM 다중 트랙 관리 ──────────────────────────
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [bgmPlaying, setBgmPlaying] = useState(false);
@@ -1426,7 +1435,10 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
     const audio = audioRef.current;
     if (!audio) return;
     if (bgmPlaying) { audio.pause(); setBgmPlaying(false); }
-    else { audio.play().then(() => setBgmPlaying(true)).catch(() => {}); }
+    else {
+      useBgmStore.getState().manualVisitPlay(); // 수동 재생 → 글로벌 BGM 복귀 취소
+      audio.play().then(() => setBgmPlaying(true)).catch(() => {});
+    }
   };
 
   const switchTrack = (idx: number) => {

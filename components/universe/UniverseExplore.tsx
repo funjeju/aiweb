@@ -11,7 +11,8 @@ import type { Constellation } from "@/lib/universe/stars";
 import { useAuthStore } from "@/lib/store/authStore";
 import { getPersonalsByOwner } from "@/lib/firebase/personals";
 import { getUniverseConfig } from "@/lib/firebase/config";
-import { Sparkles, LogIn, Plus, Minus } from "lucide-react";
+import { Sparkles, LogIn, Plus, Minus, Play, Pause, SkipBack, SkipForward } from "lucide-react";
+import { useBgmStore } from "@/lib/store/bgmStore";
 
 /* ─── 타입 ─────────────────────────────────────── */
 
@@ -191,11 +192,29 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
 
   /* 내 별자리 여부 */
   const [myConstellationId, setMyConstellationId] = useState<string | null>(null);
+  const bgmInitRef = useRef(false);
+  const { setMyBgm, setMyTrackIdx, myTracks, myTrackIdx, isPlaying, mode, play, pause } = useBgmStore();
+
   useEffect(() => {
-    if (!user) { setMyConstellationId(null); return; }
+    if (!user) { setMyConstellationId(null); bgmInitRef.current = false; return; }
     getPersonalsByOwner(user.uid).then((pages) => {
       const mine = pages.find((p) => p.universe);
       setMyConstellationId(mine?.id ?? null);
+
+      // BGM 초기화 (첫 로드 시 한 번만)
+      if (!bgmInitRef.current && mine?.universe?.bgmList?.length) {
+        bgmInitRef.current = true;
+        const list = mine.universe.bgmList;
+        const shuffle = mine.universe.bgmShuffle ?? false;
+        const tracks = list.map((t: { url: string; name: string; volume?: number }) => ({
+          url: t.url, name: t.name, volume: t.volume,
+        }));
+        let initIdx = 0;
+        if (shuffle) { initIdx = Math.floor(Math.random() * tracks.length); }
+        else { const d = list.findIndex((t: { isDefault?: boolean }) => t.isDefault); initIdx = d >= 0 ? d : 0; }
+        setMyBgm(tracks, mine.id);
+        setMyTrackIdx(initIdx);
+      }
     }).catch(() => {});
   }, [user]);
 
@@ -1000,6 +1019,35 @@ export function UniverseExplore({ universes }: { universes: UniverseItem[] }) {
         </div>
         );
       })}
+
+      {/* 하단 미니 BGM 플레이어 */}
+      {user && myTracks.length > 0 && (
+        <div className="absolute left-1/2 -translate-x-1/2 z-20 pointer-events-auto flex items-center gap-1.5 px-3 py-2 rounded-full bg-black/50 backdrop-blur-sm border border-white/10"
+          style={{ bottom: "max(6.5rem, env(safe-area-inset-bottom, 20px) + 5.5rem)" }}>
+          {myTracks.length > 1 && (
+            <button
+              onClick={() => setMyTrackIdx((myTrackIdx - 1 + myTracks.length) % myTracks.length)}
+              className="text-white/40 hover:text-white/80 transition-colors">
+              <SkipBack size={11} />
+            </button>
+          )}
+          <button
+            onClick={() => (isPlaying && mode === "mine") ? pause() : play()}
+            className="text-white/70 hover:text-white transition-colors">
+            {(isPlaying && mode === "mine") ? <Pause size={14} /> : <Play size={14} />}
+          </button>
+          {myTracks.length > 1 && (
+            <button
+              onClick={() => setMyTrackIdx((myTrackIdx + 1) % myTracks.length)}
+              className="text-white/40 hover:text-white/80 transition-colors">
+              <SkipForward size={11} />
+            </button>
+          )}
+          <span className="text-white/40 text-[10px] max-w-[90px] truncate ml-1">
+            {myTracks[myTrackIdx]?.name ?? "—"}
+          </span>
+        </div>
+      )}
 
       {/* 하단 CTA */}
       <div className="absolute bottom-0 inset-x-0 flex flex-col items-center gap-3 z-20 pointer-events-none" style={{ paddingBottom: "max(5rem, env(safe-area-inset-bottom, 20px) + 4rem)" }}>

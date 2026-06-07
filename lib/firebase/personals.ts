@@ -125,3 +125,20 @@ export async function getAllPersonals(maxCount = 200): Promise<PersonalSchema[]>
   const snap = await getDocs(q);
   return snap.docs.map((d) => d.data() as PersonalSchema);
 }
+
+/** 특정 별을 도감에 추가한 유저 목록 (랜덤 순) */
+export async function getPersonalsByStarSlug(starSlug: string, maxCount = 30): Promise<PersonalSchema[]> {
+  const q = query(
+    collection(db, COLLECTION),
+    where("universe.starArchive", "array-contains", starSlug),
+    limit(maxCount),
+  );
+  const snap = await getDocs(q);
+  const docs = snap.docs.map((d) => d.data() as PersonalSchema);
+  // 클라이언트 측 랜덤 셔플
+  for (let i = docs.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [docs[i], docs[j]] = [docs[j], docs[i]];
+  }
+  return docs;
+}

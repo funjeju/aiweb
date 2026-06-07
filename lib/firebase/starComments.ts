@@ -19,15 +19,18 @@ export interface StarComment {
 const col = (starName: string) =>
   collection(db, "starComments", starName, "comments");
 
-/** 공개 댓글만 — 타인 스페이스에서 별 클릭 시 */
+/** 공개 댓글만 — 타인 스페이스에서 별 클릭 시
+ *  복합 인덱스 없이 동작하도록 orderBy 제거 후 클라이언트 정렬 */
 export async function getPublicStarComments(starName: string, max = 30): Promise<StarComment[]> {
-  const q = query(col(starName), where("isPublic", "==", true), orderBy("createdAt", "asc"), limit(max));
+  const q = query(col(starName), where("isPublic", "==", true), limit(max));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => ({
+  const docs = snap.docs.map((d) => ({
     id: d.id,
     ...(d.data() as Omit<StarComment, "id" | "createdAt">),
     createdAt: d.data().createdAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
   }));
+  docs.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  return docs;
 }
 
 /** 전체 댓글 — 내 스페이스에서 내 별 클릭 시 */

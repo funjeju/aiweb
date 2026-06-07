@@ -7,6 +7,8 @@ import { ChevronLeft, Globe, Loader2, ExternalLink, Languages } from "lucide-rea
 import type { StarArchiveData } from "@/lib/data/star-archive";
 import { getPublicStarComments } from "@/lib/firebase/starComments";
 import type { StarComment } from "@/lib/firebase/starComments";
+import { getPersonalsByStarSlug } from "@/lib/firebase/personals";
+import type { PersonalSchema } from "@/lib/types/personal";
 import { BRIGHT_STARS } from "@/lib/universe/stars";
 import { cn } from "@/lib/utils";
 
@@ -126,7 +128,15 @@ export function StarArchivePage({ star }: { star: StarArchiveData }) {
           </div>
         )}
 
-        {/* 이 별을 가진 사람들 섹션 (추후 실제 코멘트 연결) */}
+        {/* 이 별을 가진 사람들 */}
+        <div className="mb-8">
+          <h2 className="text-xs text-white/35 uppercase tracking-widest font-semibold mb-4">
+            {lang === "en" ? "People with this star" : "이 별을 가진 사람들"}
+          </h2>
+          <StarOwners slug={star.slug} lang={lang} />
+        </div>
+
+        {/* 이야기 섹션 */}
         <div className="rounded-2xl border border-white/8 bg-white/3 p-6">
           <h2 className="text-xs text-white/35 uppercase tracking-widest font-semibold mb-4">
             {lang === "en" ? "Stories from people with this star" : "이 별을 가진 사람들의 이야기"}
@@ -143,6 +153,65 @@ export function StarArchivePage({ star }: { star: StarArchiveData }) {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ─── 이 별을 가진 사람들 (랜덤) ─── */
+
+function StarOwners({ slug, lang }: { slug: string; lang: Lang }) {
+  const [owners, setOwners] = useState<PersonalSchema[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getPersonalsByStarSlug(slug, 20)
+      .then(setOwners)
+      .finally(() => setLoading(false));
+  }, [slug]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-4">
+        <Loader2 size={16} className="text-white/30 animate-spin" />
+      </div>
+    );
+  }
+
+  if (owners.length === 0) {
+    return (
+      <p className="text-sm text-white/25 py-2">
+        {lang === "en" ? "No one has this star yet." : "아직 이 별을 가진 사람이 없어요."}
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {owners.map((p) => {
+        const u = p.universe;
+        if (!u) return null;
+        const color = u.color ?? "#a78bfa";
+        const displayName = p.profile?.name ?? "익명";
+        const photo = p.profile?.photo;
+        return (
+          <a
+            key={p.id}
+            href={`/p/${p.id}`}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors hover:bg-white/10"
+            style={{ borderColor: `${color}40`, backgroundColor: `${color}10` }}
+          >
+            {photo ? (
+              <img src={photo} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
+            ) : (
+              <div className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[9px] font-bold"
+                style={{ backgroundColor: `${color}30`, color }}>
+                {displayName[0] ?? "★"}
+              </div>
+            )}
+            <span className="text-xs font-medium text-white/75 max-w-[100px] truncate">{displayName}</span>
+          </a>
+        );
+      })}
     </div>
   );
 }
