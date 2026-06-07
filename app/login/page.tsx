@@ -3,8 +3,10 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signInWithGoogle, getGoogleRedirectResult } from "@/lib/firebase/auth";
+import { getPersonalsByOwner } from "@/lib/firebase/personals";
 import { useAuthStore } from "@/lib/store/authStore";
 import { Sparkles, Loader2 } from "lucide-react";
+import type { User } from "firebase/auth";
 
 export default function LoginPage() {
   return (
@@ -18,6 +20,18 @@ export default function LoginPage() {
   );
 }
 
+/** 별자리 유무에 따라 분기 리다이렉트 */
+async function resolveUniverseRedirect(user: User, fallback: string): Promise<string> {
+  // fallback이 별자리 생성 흐름일 때만 기존 별자리 체크
+  if (!fallback.includes("/private/create/universe")) return fallback;
+  try {
+    const pages = await getPersonalsByOwner(user.uid);
+    const myUniverse = pages.find((p) => !!p.universe?.color);
+    if (myUniverse) return `/p/${myUniverse.id}`;
+  } catch { /* 실패 시 생성 페이지로 */ }
+  return "/private/create/universe";
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -27,12 +41,17 @@ function LoginForm() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (user) router.replace(from);
+    if (!user) return;
+    resolveUniverseRedirect(user, from).then((dest) => router.replace(dest));
   }, [user, from, router]);
 
   useEffect(() => {
     getGoogleRedirectResult()
-      .then((result) => { if (result?.user) router.replace(from); })
+      .then(async (result) => {
+        if (!result?.user) return;
+        const dest = await resolveUniverseRedirect(result.user, from);
+        router.replace(dest);
+      })
       .catch(() => {});
   }, [router, from]);
 
@@ -40,8 +59,11 @@ function LoginForm() {
     setLoading(true);
     setError("");
     try {
-      await signInWithGoogle();
-      router.push(from);
+      const credential = await signInWithGoogle();
+      if (credential?.user) {
+        const dest = await resolveUniverseRedirect(credential.user, from);
+        router.push(dest);
+      }
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message || "";
       if (!msg.includes("redirect")) {
