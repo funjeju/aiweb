@@ -11,7 +11,7 @@ import { UniverseSettings } from "./UniverseSettings";
 import { generateConstellation, generateConstellationFromSeed } from "@/lib/universe/stars";
 import { getStarLore } from "@/lib/universe/star-lore";
 import type { ConstellationStar } from "@/lib/universe/stars";
-import { getPublishedUniverses, updatePersonal, getPersonalById, getPersonalsByOwner, getStarNeighbors, addStarToArchive } from "@/lib/firebase/personals";
+import { getPublishedUniverses, updatePersonal, getPersonalById, getPersonalsByOwner, getStarNeighbors, addStarToArchive, saveCountry } from "@/lib/firebase/personals";
 import { getStarComments, getPublicStarComments, addStarComment, deleteStarComment, updateStarCommentVisibility } from "@/lib/firebase/starComments";
 import type { StarComment } from "@/lib/firebase/starComments";
 import { uploadPersonalImage } from "@/lib/firebase/storage";
@@ -88,12 +88,36 @@ const DEFAULT_POS = [
   { top: "82%", left: "50%" }, { top: "26%", left: "22%" }, { top: "26%", left: "78%" },
 ];
 
+/* ─── 국가 목록 + 유틸 ─────────────────────────── */
+
+const COUNTRIES = [
+  { code: "KR", name: "대한민국" }, { code: "US", name: "미국" },
+  { code: "JP", name: "일본" }, { code: "CN", name: "중국" },
+  { code: "GB", name: "영국" }, { code: "DE", name: "독일" },
+  { code: "FR", name: "프랑스" }, { code: "CA", name: "캐나다" },
+  { code: "AU", name: "호주" }, { code: "BR", name: "브라질" },
+  { code: "IN", name: "인도" }, { code: "SG", name: "싱가포르" },
+  { code: "TH", name: "태국" }, { code: "VN", name: "베트남" },
+  { code: "TW", name: "대만" }, { code: "HK", name: "홍콩" },
+  { code: "MX", name: "멕시코" }, { code: "ES", name: "스페인" },
+  { code: "IT", name: "이탈리아" }, { code: "NL", name: "네덜란드" },
+  { code: "SE", name: "스웨덴" }, { code: "NO", name: "노르웨이" },
+  { code: "NZ", name: "뉴질랜드" }, { code: "PT", name: "포르투갈" },
+];
+
+function countryFlag(code: string): string {
+  if (!code || code.length !== 2) return "🌐";
+  return code.toUpperCase().replace(/./g, (c) =>
+    String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))
+  );
+}
+
 /* ─── 내 소개 패널 ─────────────────────────────── */
 
 function ProfilePanel({ data, isOwner, onSaved }: {
   data: UniverseData;
   isOwner: boolean;
-  onSaved: (u: { role: string; tagline: string; about: string; photo?: string }) => void;
+  onSaved: (u: { role: string; tagline: string; about: string; photo?: string; country?: string; countryChangedAt?: string }) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [local, setLocal] = useState({
@@ -101,16 +125,24 @@ function ProfilePanel({ data, isOwner, onSaved }: {
     tagline: data.tagline ?? "",
     about: data.about ?? "",
     photo: data.photo ?? "",
+    country: data.country ?? "",
+    countryChangedAt: data.countryChangedAt ?? "",
   });
-  const [form, setForm] = useState({ role: local.role, tagline: local.tagline, about: local.about });
+  const [form, setForm] = useState({ role: local.role, tagline: local.tagline, about: local.about, country: local.country });
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoRef = useRef<HTMLInputElement>(null);
 
   const openEdit = () => {
-    setForm({ role: local.role, tagline: local.tagline, about: local.about });
+    setForm({ role: local.role, tagline: local.tagline, about: local.about, country: local.country });
     setEditing(true);
   };
+
+  // 국적 변경 가능 여부
+  const canChangeCountry = data.isAdmin || (() => {
+    if (!local.countryChangedAt) return true;
+    return Date.now() - new Date(local.countryChangedAt).getTime() > 30 * 24 * 60 * 60 * 1000;
+  })();
 
   const save = async () => {
     if (!data.personalId) return;
@@ -123,9 +155,21 @@ function ProfilePanel({ data, isOwner, onSaved }: {
         "profile.bio": form.about,
         about: form.about,
       } as any);
-      const next = { role: form.role, tagline: form.tagline, about: form.about, photo: local.photo };
+
+      let newCountryChangedAt = local.countryChangedAt;
+      if (form.country && form.country !== local.country && canChangeCountry) {
+        const now = new Date().toISOString();
+        await saveCountry(data.personalId, form.country, now);
+        newCountryChangedAt = now;
+      }
+
+      const next = {
+        role: form.role, tagline: form.tagline, about: form.about, photo: local.photo,
+        country: form.country || local.country,
+        countryChangedAt: newCountryChangedAt,
+      };
       setLocal((p) => ({ ...p, ...next }));
-      onSaved(next);           // 부모 state 갱신
+      onSaved(next);
       setEditing(false);
     } finally { setSaving(false); }
   };
@@ -163,6 +207,26 @@ function ProfilePanel({ data, isOwner, onSaved }: {
             rows={4} placeholder="나를 소개하는 글을 자유롭게 써주세요"
             className="w-full px-3 py-2 rounded-xl bg-white/8 border border-white/15 text-sm text-white placeholder-white/25 focus:border-violet-400 focus:outline-none resize-none" />
         </div>
+        <div>
+          <label className="block text-xs text-white/50 mb-1">국적</label>
+          {canChangeCountry ? (
+            <select
+              value={form.country}
+              onChange={(e) => setForm((p) => ({ ...p, country: e.target.value }))}
+              className="w-full px-3 py-2 rounded-xl bg-white/8 border border-white/15 text-sm text-white focus:border-violet-400 focus:outline-none">
+              <option value="">선택 안 함</option>
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>{countryFlag(c.code)} {c.name}</option>
+              ))}
+            </select>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
+              <span className="text-base">{countryFlag(local.country)}</span>
+              <span className="text-sm text-white/60">{COUNTRIES.find((c) => c.code === local.country)?.name ?? local.country}</span>
+              <span className="ml-auto text-[10px] text-amber-300/70">월 1회 변경 가능</span>
+            </div>
+          )}
+        </div>
         <div className="flex gap-2">
           <button onClick={save} disabled={saving}
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-violet-500 text-white text-sm font-bold hover:bg-violet-600 disabled:opacity-50">
@@ -196,12 +260,19 @@ function ProfilePanel({ data, isOwner, onSaved }: {
 
         <div className="flex-1 min-w-0">
           <p className="font-bold text-white text-base leading-tight">{data.name}</p>
-          {local.role && (
-            <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full border"
-              style={{ color: data.color, borderColor: `${data.color}55`, backgroundColor: `${data.color}15` }}>
-              {local.role}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+            {local.role && (
+              <span className="text-xs px-2 py-0.5 rounded-full border"
+                style={{ color: data.color, borderColor: `${data.color}55`, backgroundColor: `${data.color}15` }}>
+                {local.role}
+              </span>
+            )}
+            {local.country && (
+              <span className="text-base leading-none" title={COUNTRIES.find((c) => c.code === local.country)?.name}>
+                {countryFlag(local.country)}
+              </span>
+            )}
+          </div>
           {local.tagline && <p className="text-xs text-white/40 mt-1 italic">{local.tagline}</p>}
         </div>
         {isOwner && (
@@ -945,7 +1016,7 @@ function MenuContent({ menu, data, isOwner, onDataUpdate }: {
   switch (menu.icon) {
     case "profile": return (
       <ProfilePanel data={data} isOwner={isOwner}
-        onSaved={(u) => onDataUpdate({ role: u.role, tagline: u.tagline, about: u.about, photo: u.photo })} />
+        onSaved={(u) => onDataUpdate({ role: u.role, tagline: u.tagline, about: u.about, photo: u.photo, country: u.country, countryChangedAt: u.countryChangedAt })} />
     );
     case "gallery": return (
       <GalleryPanel data={data} isOwner={isOwner}
@@ -1008,7 +1079,6 @@ function StarComments({ starName, currentUser, isOwner }: {
           const json = await res.json();
           country = json.country as string;
           if (country) {
-            const { saveCountry } = await import("@/lib/firebase/personals");
             await saveCountry(myPage.id, country);
           }
         } catch { /* 무시 */ }
@@ -1947,9 +2017,6 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           onToggleBgm={toggleBgm}
           onClose={() => setShowSettings(false)}
           initialColor={data.color}
-          currentCountry={data.country}
-          countryChangedAt={data.countryChangedAt}
-          isAdmin={data.isAdmin}
           onSaved={(s) => {
             handleSettingsSaved(s);
             if (s.color !== data.color) setData((prev) => ({ ...prev, color: s.color }));

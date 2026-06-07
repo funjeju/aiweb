@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Tab = "assets" | "bgm" | "menus" | "layout" | "color" | "nation";
+type Tab = "assets" | "bgm" | "menus" | "layout" | "color";
 
 interface MenuNode { id: string; label: string; icon: UniverseIconType; customIcon?: string; }
 
@@ -881,9 +881,6 @@ export function UniverseSettings({
   onToggleBgm,
   onClose,
   onSaved,
-  currentCountry,
-  countryChangedAt,
-  isAdmin = false,
 }: {
   personalId: string;
   menus: MenuNode[];
@@ -902,15 +899,8 @@ export function UniverseSettings({
   onClose: () => void;
   onSaved: (state: SettingsState) => void;
   initialColor?: string;
-  currentCountry?: string;
-  countryChangedAt?: string;
-  isAdmin?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("assets");
-  const [nation, setNation] = useState<{ country?: string; changedAt?: string }>({
-    country: currentCountry,
-    changedAt: countryChangedAt,
-  });
   const [saving, setSaving] = useState(false);
   const [state, setState] = useState<SettingsState>({
     selectedAssets: initialAssets,
@@ -968,7 +958,6 @@ export function UniverseSettings({
     { id: "menus",   label: "메뉴",   icon: <LayoutGrid size={14} /> },
     { id: "layout",  label: "레이아웃", icon: <Move size={14} /> },
     { id: "color",   label: "별자리색", icon: <Palette size={14} /> },
-    { id: "nation",  label: "국적",   icon: <Globe size={14} /> },
   ];
 
   return (
@@ -1073,19 +1062,9 @@ export function UniverseSettings({
               </div>
             </div>
           )}
-          {tab === "nation" && (
-            <NationTab
-              personalId={personalId}
-              currentCountry={nation.country}
-              countryChangedAt={nation.changedAt}
-              isAdmin={isAdmin ?? false}
-              onChanged={(code, changedAt) => setNation({ country: code, changedAt })}
-            />
-          )}
         </div>
 
-        {/* 저장 버튼 — nation 탭에서는 숨김 (자체 저장 버튼 있음) */}
-        <div className={cn("px-5 py-4 border-t border-white/10 shrink-0", tab === "nation" && "hidden")}>
+        <div className="px-5 py-4 border-t border-white/10 shrink-0">
           <button onClick={save} disabled={saving}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-violet-500 text-white font-bold hover:bg-violet-600 disabled:opacity-50 transition-colors">
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
