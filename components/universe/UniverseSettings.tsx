@@ -93,31 +93,82 @@ function MenuIconEditor({ menus, personalId, onChange }: {
     setEditingId(null);
   };
 
+  const ALL_MENU_TYPES: { icon: UniverseIconType; label: string; defaultEmoji: string }[] = [
+    { icon: "profile", label: "소개",     defaultEmoji: "👤" },
+    { icon: "diary",   label: "다이어리", defaultEmoji: "📖" },
+    { icon: "gallery", label: "갤러리",   defaultEmoji: "🖼" },
+    { icon: "link",    label: "즐겨찾기", defaultEmoji: "🔗" },
+    { icon: "music",   label: "음악",     defaultEmoji: "🎵" },
+    { icon: "note",    label: "메모",     defaultEmoji: "📝" },
+  ];
+
+  const existingIcons = new Set(menus.map((m) => m.icon));
+  const addableTypes = ALL_MENU_TYPES.filter((t) => !existingIcons.has(t.icon));
+
+  const addMenu = (type: { icon: UniverseIconType; label: string; defaultEmoji: string }) => {
+    const newMenu: MenuNode = {
+      id: type.icon,
+      label: type.label,
+      icon: type.icon,
+    };
+    onChange([...menus, newMenu]);
+  };
+
+  const removeMenu = (id: string) => {
+    onChange(menus.filter((m) => m.id !== id));
+    if (editingId === id) setEditingId(null);
+  };
+
   return (
     <div className="space-y-3">
-      <p className="text-xs text-white/50">메뉴 아이콘을 원하는 이모지로 바꿀 수 있어요.</p>
+      <p className="text-xs text-white/50">메뉴를 추가하거나 아이콘을 바꿀 수 있어요.</p>
       <div className="grid grid-cols-3 gap-2">
         {menus.map((menu) => {
           const icon = menu.customIcon;
           const isUrl = icon?.startsWith("http") || icon?.startsWith("/");
           return (
-            <button key={menu.id} onClick={() => { setEditingId(menu.id); setCustomText(""); }}
-              className={cn(
-                "flex flex-col items-center gap-1.5 py-3 rounded-2xl border transition-all",
-                editingId === menu.id
-                  ? "border-violet-400 bg-violet-500/20"
-                  : "border-white/10 bg-white/5 hover:border-violet-400/40"
-              )}>
-              {isUrl
-                ? <img src={icon} alt="" className="w-8 h-8 rounded-full object-cover" />
-                : <span className="text-2xl leading-none">{icon ?? ICON_MAP[menu.id] ?? "⭐"}</span>
-              }
-              <span className="text-[10px] text-white/50 truncate w-full text-center px-1">{menu.label}</span>
-              {icon && <span className="text-[8px] text-violet-400/70">커스텀</span>}
-            </button>
+            <div key={menu.id} className="relative group/card">
+              <button onClick={() => { setEditingId(menu.id); setCustomText(""); }}
+                className={cn(
+                  "w-full flex flex-col items-center gap-1.5 py-3 rounded-2xl border transition-all",
+                  editingId === menu.id
+                    ? "border-violet-400 bg-violet-500/20"
+                    : "border-white/10 bg-white/5 hover:border-violet-400/40"
+                )}>
+                {isUrl
+                  ? <img src={icon} alt="" className="w-8 h-8 rounded-full object-cover" />
+                  : <span className="text-2xl leading-none">{icon ?? ICON_MAP[menu.id] ?? "⭐"}</span>
+                }
+                <span className="text-[10px] text-white/50 truncate w-full text-center px-1">{menu.label}</span>
+                {icon && <span className="text-[8px] text-violet-400/70">커스텀</span>}
+              </button>
+              {/* 삭제 버튼 */}
+              <button
+                onClick={() => removeMenu(menu.id)}
+                className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity z-10"
+                title="메뉴 삭제">
+                <X size={9} className="text-white" />
+              </button>
+            </div>
           );
         })}
       </div>
+
+      {/* 추가 가능한 메뉴 타입 */}
+      {addableTypes.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-white/30 uppercase tracking-wider">추가 가능한 메뉴</p>
+          <div className="flex flex-wrap gap-1.5">
+            {addableTypes.map((t) => (
+              <button key={t.icon} onClick={() => addMenu(t)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-dashed border-white/15 text-white/40 text-xs hover:border-violet-400/50 hover:text-violet-400 transition-colors">
+                <span>{t.defaultEmoji}</span>
+                <span>{t.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {editingId && editingMenu && (
         <div className="rounded-2xl bg-white/5 border border-white/10 p-3 space-y-2.5">

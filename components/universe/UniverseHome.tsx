@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 
 export interface UniverseMenu { id: string; label: string; icon: UniverseIconType; customIcon?: string; }
 
-export interface BgmTrack { url: string; name: string; autoPlay?: boolean; volume?: number; }
+export interface BgmTrack { url: string; name: string; autoPlay?: boolean; volume?: number; isDefault?: boolean; }
 
 export interface UniverseData {
   name: string;
