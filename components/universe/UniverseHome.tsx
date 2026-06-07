@@ -958,6 +958,7 @@ function MenuContent({ menu, data, isOwner, onDataUpdate }: {
         isOwner={isOwner}
         color={data.color}
         initialFolders={data.favorites}
+        onSaved={(folders) => onDataUpdate({ favorites: folders })}
       />
     );
     case "music":   return <p className="text-white/50 text-sm py-4 text-center">음악 공간은 곧 추가됩니다.</p>;

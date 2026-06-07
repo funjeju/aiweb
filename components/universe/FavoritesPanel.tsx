@@ -34,10 +34,11 @@ interface Props {
   isOwner: boolean;
   color: string;
   initialFolders?: FavoriteFolder[];
+  onSaved?: (folders: FavoriteFolder[]) => void;
 }
 
 /* ─── Main ─── */
-export function FavoritesPanel({ personalId, isOwner, color, initialFolders }: Props) {
+export function FavoritesPanel({ personalId, isOwner, color, initialFolders, onSaved }: Props) {
   const [folders, setFolders] = useState<FavoriteFolder[]>(initialFolders ?? []);
   const [openFolderId, setOpenFolderId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -45,6 +46,7 @@ export function FavoritesPanel({ personalId, isOwner, color, initialFolders }: P
   /* 변경 → Firestore 저장 */
   const persist = async (next: FavoriteFolder[]) => {
     setFolders(next);
+    onSaved?.(next); // 부모 data 업데이트 (패널 재마운트 시 초기화 방지)
     if (!isOwner) return;
     setSaving(true);
     try { await saveFavorites(personalId, next); } finally { setSaving(false); }
