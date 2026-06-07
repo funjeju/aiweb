@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { updatePersonal } from "@/lib/firebase/personals";
-import { uploadPersonalAudio, uploadPersonalImage } from "@/lib/firebase/storage";
+import { updatePersonal, saveCustomAssets } from "@/lib/firebase/personals";
+import { uploadPersonalAudio, uploadPersonalImage, uploadPersonalAsset } from "@/lib/firebase/storage";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
 import type { UniverseAsset } from "@/lib/types/asset";
 import type { UniverseIconType } from "@/lib/types/personal";
@@ -27,6 +27,7 @@ interface SettingsState {
   assetPositions: Record<string, { top: string; left: string }>;
   assetPositionsMobile: Record<string, { top: string; left: string }>;
   color: string;
+  customAssets: UniverseAsset[];
 }
 
 const COLOR_PRESETS = [
@@ -510,47 +511,134 @@ function BgmTab({
 function AssetsTab({
   selected,
   allAssets,
+  customAssets,
   profilePhotoUrl,
+  personalId,
   onChange,
+  onCustomAssetsChange,
 }: {
   selected: string[];
   allAssets: UniverseAsset[];
+  customAssets: UniverseAsset[];
   profilePhotoUrl?: string;
+  personalId: string;
   onChange: (ids: string[]) => void;
+  onCustomAssetsChange: (assets: UniverseAsset[]) => void;
 }) {
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
 
   const photoActive = selected.includes("profile-photo");
 
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadPersonalAsset(personalId, file);
+      const newAsset: UniverseAsset = {
+        id: `custom-${Date.now()}`,
+        name: file.name.replace(/\.[^.]+$/, "").slice(0, 12) || "커스텀",
+        emoji: "🖼️",
+        imageUrl: url,
+        category: "object",
+        animationType: "float",
+        isFree: true,
+        isDefault: false,
+        createdAt: new Date().toISOString(),
+      };
+      const updated = [...customAssets, newAsset];
+      onCustomAssetsChange(updated);
+      // 업로드하자마자 선택 상태에 추가
+      onChange([...selected, newAsset.id]);
+    } catch (err: unknown) {
+      alert((err as { message?: string })?.message ?? "업로드에 실패했습니다.");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const removeCustom = (assetId: string) => {
+    onCustomAssetsChange(customAssets.filter((a) => a.id !== assetId));
+    onChange(selected.filter((id) => id !== assetId));
+  };
+
   return (
     <div className="space-y-4">
       <p className="text-xs text-white/50">우주에 띄울 에셋을 선택하세요. 여러 개 조합 가능해요.</p>
 
-      {/* 프로필 사진 에셋 */}
-      {profilePhotoUrl && (
-        <div>
-          <p className="text-[10px] text-white/35 uppercase tracking-wider mb-2 font-semibold">나만의 에셋</p>
-          <button onClick={() => toggle("profile-photo")}
-            className={cn(
-              "flex items-center gap-3 w-full px-4 py-3 rounded-2xl border-2 transition-all text-left",
-              photoActive
-                ? "border-violet-400 bg-violet-500/20"
-                : "border-white/10 bg-white/5 hover:border-violet-400/40"
-            )}>
-            <img src={profilePhotoUrl} alt="프로필" className="w-10 h-10 rounded-full object-cover border-2 border-white/20 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white">프로필 사진</p>
-              <p className="text-[10px] text-white/40">우주 어딘가에 내 사진을 띄워요</p>
+      {/* 나만의 에셋 섹션 (프로필 사진 + 커스텀 업로드) */}
+      <div>
+        <p className="text-[10px] text-white/35 uppercase tracking-wider mb-2 font-semibold">나만의 에셋</p>
+        <div className="space-y-2">
+          {/* 프로필 사진 */}
+          {profilePhotoUrl && (
+            <button onClick={() => toggle("profile-photo")}
+              className={cn(
+                "flex items-center gap-3 w-full px-4 py-3 rounded-2xl border-2 transition-all text-left",
+                photoActive
+                  ? "border-violet-400 bg-violet-500/20"
+                  : "border-white/10 bg-white/5 hover:border-violet-400/40"
+              )}>
+              <img src={profilePhotoUrl} alt="프로필" className="w-10 h-10 rounded-full object-cover border-2 border-white/20 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">프로필 사진</p>
+                <p className="text-[10px] text-white/40">우주 어딘가에 내 사진을 띄워요</p>
+              </div>
+              {photoActive && <Check size={14} className="text-violet-400 shrink-0" />}
+            </button>
+          )}
+
+          {/* 커스텀 업로드 에셋 목록 */}
+          {customAssets.length > 0 && (
+            <div className="grid grid-cols-4 gap-2">
+              {customAssets.map((asset) => {
+                const active = selected.includes(asset.id);
+                return (
+                  <div key={asset.id} className="relative group">
+                    <button onClick={() => toggle(asset.id)}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 py-3 w-full rounded-2xl border-2 transition-all",
+                        active
+                          ? "border-violet-400 bg-violet-500/20 scale-105"
+                          : "border-white/10 bg-white/5 hover:border-violet-400/40"
+                      )}>
+                      {asset.imageUrl
+                        ? <img src={asset.imageUrl} alt={asset.name} className="w-8 h-8 object-contain" />
+                        : <span className="text-2xl">{asset.emoji}</span>
+                      }
+                      <span className="text-[10px] text-white/60 truncate w-full text-center px-1">{asset.name}</span>
+                      {active && <Check size={10} className="text-violet-400" />}
+                    </button>
+                    {/* 삭제 버튼 */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeCustom(asset.id); }}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      <X size={10} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
-            {photoActive && <Check size={14} className="text-violet-400 shrink-0" />}
+          )}
+
+          {/* 업로드 버튼 */}
+          <button onClick={() => fileRef.current?.click()} disabled={uploading}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-white/15 text-white/30 hover:border-violet-400 hover:text-violet-400 transition-colors text-xs font-medium">
+            {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+            {uploading ? "업로드 중..." : "이미지 업로드 (PNG · WebP · GIF · SVG)"}
           </button>
+          <input ref={fileRef} type="file" accept=".png,.webp,.gif,.svg,image/png,image/webp,image/gif,image/svg+xml" className="hidden" onChange={handleUpload} />
         </div>
-      )}
+      </div>
 
       {/* 기본 에셋 */}
       <div>
-        {profilePhotoUrl && <p className="text-[10px] text-white/35 uppercase tracking-wider mb-2 font-semibold">기본 에셋</p>}
+        <p className="text-[10px] text-white/35 uppercase tracking-wider mb-2 font-semibold">기본 에셋</p>
         <div className="grid grid-cols-4 gap-2">
           {allAssets.filter((a) => a.isFree && a.id !== "profile-photo").map((asset) => {
             const active = selected.includes(asset.id);
@@ -585,6 +673,7 @@ export function UniverseSettings({
   initialLayoutMobile,
   initialAssetPositions,
   initialAssetPositionsMobile,
+  initialCustomAssets = [],
   allAssets = DEFAULT_ASSETS,
   profilePhotoUrl,
   bgmPlaying,
@@ -601,6 +690,7 @@ export function UniverseSettings({
   initialLayoutMobile?: Record<string, { top: string; left: string }>;
   initialAssetPositions?: Record<string, { top: string; left: string }>;
   initialAssetPositionsMobile?: Record<string, { top: string; left: string }>;
+  initialCustomAssets?: UniverseAsset[];
   allAssets?: UniverseAsset[];
   profilePhotoUrl?: string;
   bgmPlaying: boolean;
@@ -620,6 +710,7 @@ export function UniverseSettings({
     assetPositions:       initialAssetPositions       ?? {},
     assetPositionsMobile: initialAssetPositionsMobile ?? {},
     color: initialColor,
+    customAssets: initialCustomAssets,
   });
 
   const save = async () => {
@@ -647,6 +738,8 @@ export function UniverseSettings({
       if (Object.keys(state.assetPositionsMobile).length > 0)
         update["universe.assetPositionsMobile"] = state.assetPositionsMobile;
 
+      // 커스텀 에셋은 배열이라 별도 저장 (dot-notation 배열은 Firestore에서 덮어쓰기 됨)
+      await saveCustomAssets(personalId, state.customAssets);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await updatePersonal(personalId, update as any);
       onSaved(state);
@@ -692,8 +785,11 @@ export function UniverseSettings({
             <AssetsTab
               selected={state.selectedAssets}
               allAssets={allAssets}
+              customAssets={state.customAssets}
               profilePhotoUrl={profilePhotoUrl}
+              personalId={personalId}
               onChange={(ids) => setState((p) => ({ ...p, selectedAssets: ids }))}
+              onCustomAssetsChange={(customAssets) => setState((p) => ({ ...p, customAssets }))}
             />
           )}
           {tab === "bgm" && (

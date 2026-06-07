@@ -138,6 +138,8 @@ export interface PersonalSchema {
     assetPositions?: Record<string, { top: string; left: string }>;
     /** 에셋 위치 — 모바일 (별도 저장) */
     assetPositionsMobile?: Record<string, { top: string; left: string }>;
+    /** 개인 업로드 커스텀 에셋 (PNG/WebP/GIF/SVG) */
+    customAssets?: import("@/lib/types/asset").UniverseAsset[];
   };
 }
 

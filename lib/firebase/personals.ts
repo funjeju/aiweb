@@ -82,6 +82,17 @@ export async function getStarNeighbors(
   return users.slice(0, count);
 }
 
+/** 커스텀 에셋 배열을 Firestore에 저장 */
+export async function saveCustomAssets(
+  personalId: string,
+  assets: import("@/lib/types/asset").UniverseAsset[],
+): Promise<void> {
+  await updateDoc(doc(db, COLLECTION, personalId), {
+    "universe.customAssets": assets,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 /** 전체 개인 페이지 조회 (어드민 전용) */
 export async function getAllPersonals(maxCount = 200): Promise<PersonalSchema[]> {
   const q = query(collection(db, COLLECTION), limit(maxCount));

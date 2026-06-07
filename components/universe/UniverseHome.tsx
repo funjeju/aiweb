@@ -18,6 +18,7 @@ import { uploadPersonalImage } from "@/lib/firebase/storage";
 import { useAuthStore } from "@/lib/store/authStore";
 import { logout } from "@/lib/firebase/auth";
 import { DEFAULT_ASSETS } from "@/lib/types/asset";
+import type { UniverseAsset } from "@/lib/types/asset";
 import type { PersonalSchema, UniverseIconType, UniverseStyle, GalleryItem } from "@/lib/types/personal";
 import { useLang, fetchTranslations } from "@/lib/i18n/useLang";
 import { collectUniverseTexts, applyUniverseTexts } from "@/lib/i18n/translatePersonal";
@@ -61,6 +62,7 @@ export interface UniverseData {
   menuLayoutMobile?: Record<string, { top: string; left: string }>;
   assetPositions?: Record<string, { top: string; left: string }>;
   assetPositionsMobile?: Record<string, { top: string; left: string }>;
+  customAssets?: UniverseAsset[];
   publicUrl?: string;
   ownerId?: string;
   personalId?: string;
@@ -1492,6 +1494,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
     menuLayoutMobile: Record<string, { top: string; left: string }>;
     assetPositions: Record<string, { top: string; left: string }>;
     assetPositionsMobile: Record<string, { top: string; left: string }>;
+    customAssets: UniverseAsset[];
   }) => {
     setData((prev) => ({
       ...prev,
@@ -1502,9 +1505,16 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
       menuLayoutMobile:   Object.keys(state.menuLayoutMobile).length   > 0 ? state.menuLayoutMobile   : undefined,
       assetPositions:     Object.keys(state.assetPositions).length     > 0 ? state.assetPositions     : undefined,
       assetPositionsMobile: Object.keys(state.assetPositionsMobile).length > 0 ? state.assetPositionsMobile : undefined,
+      customAssets: state.customAssets,
     }));
     setTrackIdx((i) => Math.min(i, Math.max(0, state.bgmList.length - 1)));
   };
+
+  // DEFAULT 에셋 + 개인 커스텀 에셋 병합
+  const allAssets = useMemo(
+    () => [...DEFAULT_ASSETS, ...(data.customAssets ?? [])],
+    [data.customAssets]
+  );
 
   // 현재 뷰포트에 맞는 메뉴/에셋 위치
   const activeMenuLayout    = isMobile ? (data.menuLayoutMobile    ?? data.menuLayout)    : data.menuLayout;
@@ -1531,6 +1541,7 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
         <FloatingAssets
           selectedIds={data.selectedAssets}
           seed={constellation.seed}
+          allAssets={allAssets}
           customPositions={activeAssetPositions}
           profilePhotoUrl={data.photo}
         />
@@ -1764,7 +1775,8 @@ export function UniverseHome({ data: initialData }: { data: UniverseData }) {
           initialLayoutMobile={data.menuLayoutMobile}
           initialAssetPositions={data.assetPositions}
           initialAssetPositionsMobile={data.assetPositionsMobile}
-          allAssets={DEFAULT_ASSETS}
+          allAssets={allAssets}
+          initialCustomAssets={data.customAssets ?? []}
           profilePhotoUrl={data.photo}
           bgmPlaying={bgmPlaying}
           onToggleBgm={toggleBgm}

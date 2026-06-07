@@ -113,6 +113,13 @@ export function FloatingAssets({
                   className="rounded-full object-cover border-2 border-white/40"
                   style={{ width: photoSize, height: photoSize }}
                 />
+              ) : p.asset.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={p.asset.imageUrl}
+                  alt={p.asset.name}
+                  style={{ width: p.size, height: p.size, objectFit: "contain" }}
+                />
               ) : (
                 p.asset.emoji
               )}

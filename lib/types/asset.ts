@@ -5,6 +5,7 @@ export interface UniverseAsset {
   id: string;
   name: string;
   emoji: string;
+  imageUrl?: string;   // 있으면 이모지 대신 이미지로 렌더링 (PNG/WebP/GIF/SVG)
   category: AssetCategory;
   animationType: AssetAnimationType;
   isFree: boolean;

@@ -79,6 +79,29 @@ export async function uploadPersonalImage(
   return getDownloadURL(snapshot.ref);
 }
 
+const ALLOWED_ASSET_TYPES = ["image/png", "image/webp", "image/gif", "image/svg+xml"];
+
+/** 투명도 보존이 필요한 에셋 업로드 (PNG/WebP/GIF/SVG만 허용, JPG 불가) */
+export async function uploadPersonalAsset(personalId: string, file: File): Promise<string> {
+  if (!ALLOWED_ASSET_TYPES.includes(file.type)) {
+    throw new Error("PNG, WebP, GIF, SVG 파일만 업로드할 수 있습니다.");
+  }
+  const extMap: Record<string, string> = {
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/svg+xml": "svg",
+  };
+  const ext = extMap[file.type] || "png";
+  const path = `personals/${personalId}/assets/${Date.now()}.${ext}`;
+  const storageRef = ref(storage, path);
+  const snapshot = await uploadBytes(storageRef, file, {
+    contentType: file.type,
+    cacheControl: "public, max-age=31536000",
+  });
+  return getDownloadURL(snapshot.ref);
+}
+
 export async function uploadPersonalAudio(personalId: string, file: File): Promise<string> {
   const ext = file.name.split(".").pop() || "mp3";
   const path = `personals/${personalId}/bgm/${Date.now()}.${ext}`;
